@@ -3,7 +3,7 @@
   "name": "Vault Waystation",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Warns you before you edit a note that another of your devices left uncommitted.",
+  "description": "在动手编辑之前，提示你另一台设备上仍有未提交的改动。",
   "author": "y1chu",
   "isDesktopOnly": true
 }
