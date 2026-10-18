@@ -659,9 +659,9 @@ export class Engine {
 
   /** 按提醒规则给出提示。全部中继都联系不上才算持续故障。 */
   private emitNotices(): void {
+    // 只有全部中继都联系不上才算持续故障：部分失败照常工作，原因记在诊断里。
     const failing = this.clients.filter(
-      (client) => this.relayStatus.get(client.name)?.lastFailure !== null &&
-        this.relayStatus.get(client.name) !== undefined,
+      (client) => (this.relayStatus.get(client.name)?.lastFailure ?? null) !== null,
     );
     const allFailing = this.clients.length > 0 && failing.length === this.clients.length;
     const failure: FailureState | null =
