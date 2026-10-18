@@ -237,8 +237,9 @@ describe("钉住的中继信息", () => {
 describe("状态缓存", () => {
   const state: PersistedState = {
     version: STATE_VERSION,
-    channelId: "00000000000000000000000000000000",
+    channels: { "relay-a": { channelId: "aa".repeat(16), alias: "vault-example" } },
     sequence: 7,
+    retired: false,
     peers: [
       {
         fingerprint: "aa",
@@ -275,10 +276,24 @@ describe("状态缓存", () => {
   it("缓存损坏时按首次运行处理", async () => {
     const files = await temporaryFiles();
 
-    for (const text of ["不是 JSON", "[]", `{"version": 99}`, `{"version": 1}`, `{"version": 1, "channelId": 1}`]) {
+    for (const text of [
+      "不是 JSON",
+      "[]",
+      `{"version": 99}`,
+      `{"version": 1}`,
+      `{"version": 1, "channels": 1}`,
+      `{"version": 1, "channels": {}, "sequence": 0, "peers": [], "revoked": []}`,
+    ]) {
       await writeTextFile(files.state, text);
       expect(await loadState(files.state)).toBeNull();
     }
+
+    // 频道一节里缺字段，同样按首次运行处理。
+    await writeTextFile(
+      files.state,
+      JSON.stringify({ ...state, channels: { "relay-a": { channelId: "aa" } } }),
+    );
+    expect(await loadState(files.state)).toBeNull();
   });
 
   it("对端内容不合规时整体丢弃", async () => {

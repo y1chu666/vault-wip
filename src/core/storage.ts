@@ -197,15 +197,23 @@ export async function saveRelayPins(path: string, pins: ReadonlyMap<string, Rela
 }
 
 /** 缓存下来的自身进度与已知对端，重启后据此接着走。 */
+/** 已注册的频道。频道标识由各中继分别生成，因此按中继名分别记录。 */
+export interface ChannelRegistration {
+  readonly channelId: string;
+  readonly alias: string;
+}
+
 export interface PersistedState {
   readonly version: number;
-  /** 频道标识；尚未注册时为空。 */
-  readonly channelId: string;
+  /** 各中继上的频道；尚未注册时为空表。 */
+  readonly channels: Readonly<Record<string, ChannelRegistration>>;
   /** 本设备已上报到的序号。 */
   readonly sequence: number;
   readonly peers: readonly DeviceStatus[];
   /** 已读到的吊销名单，长期保留。 */
   readonly revoked: readonly string[];
+  /** 本设备是否已在这一轮中退役；退役后需重新注册才能继续使用。 */
+  readonly retired: boolean;
 }
 
 /**
@@ -230,11 +238,15 @@ export async function loadState(path: string): Promise<PersistedState | null> {
     return null;
   }
 
-  const channelId = raw["channelId"];
+  const channels = parseChannels(raw["channels"]);
   const sequence = raw["sequence"];
   const peers = raw["peers"];
   const revoked = raw["revoked"];
-  if (typeof channelId !== "string" || !isSequence(sequence) || !Array.isArray(peers) || !Array.isArray(revoked)) {
+  const retired = raw["retired"];
+  if (channels === null || !isSequence(sequence) || !Array.isArray(peers) || !Array.isArray(revoked)) {
+    return null;
+  }
+  if (typeof retired !== "boolean") {
     return null;
   }
 
@@ -257,10 +269,11 @@ export async function loadState(path: string): Promise<PersistedState | null> {
 
   return {
     version: STATE_VERSION,
-    channelId,
+    channels,
     sequence,
     peers: parsedPeers,
     revoked: revokedFingerprints,
+    retired,
   };
 }
 
@@ -280,6 +293,25 @@ export async function fileExists(path: string): Promise<boolean> {
     }
     throw new StorageError(`查看 ${path} 失败：${messageOf(error)}`);
   }
+}
+
+function parseChannels(raw: unknown): Record<string, ChannelRegistration> | null {
+  if (!isTable(raw)) {
+    return null;
+  }
+  const channels: Record<string, ChannelRegistration> = {};
+  for (const [name, value] of Object.entries(raw)) {
+    if (!isTable(value)) {
+      return null;
+    }
+    const channelId = value["channelId"];
+    const alias = value["alias"];
+    if (typeof channelId !== "string" || typeof alias !== "string") {
+      return null;
+    }
+    channels[name] = { channelId, alias };
+  }
+  return channels;
 }
 
 function parseDeviceStatus(raw: unknown): DeviceStatus | null {

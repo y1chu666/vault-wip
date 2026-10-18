@@ -110,6 +110,21 @@ export class RelayClient {
     return this.options.name;
   }
 
+  /** 中继地址。 */
+  get url(): string {
+    return this.options.url;
+  }
+
+  /** 传输级别。 */
+  get level(): TransportLevel {
+    return this.options.level;
+  }
+
+  /** 是否处于降级传输：降级时禁止注册、吊销与退役。 */
+  get degraded(): boolean {
+    return isDegraded(this.options.level);
+  }
+
   /** 当前钉住的公钥信息；首次配对之后才有值。 */
   get pinned(): RelayPin | null {
     return this.pin;
@@ -339,7 +354,7 @@ export class RelayClient {
   }
 
   private refuseWhenDegraded(action: string): void {
-    if (isDegraded(this.options.level)) {
+    if (this.degraded) {
       throw new RelayError(
         "transport",
         `${this.describe()}：当前传输级别属于降级，不允许执行${action}`,
