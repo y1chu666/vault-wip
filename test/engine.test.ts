@@ -1,6 +1,4 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -28,44 +26,11 @@ import {
   type PluginFiles,
 } from "../src/core/storage.js";
 import { startFakeRelay, type FakeRelay, type Reply } from "./helpers/relay-server.js";
-
-const channels: string[] = [];
+import { cleanupTemporary, initRepository, statusContent, temporaryDir } from "./helpers/vault.js";
 
 afterEach(() => {
-  for (const path of channels.splice(0)) {
-    rmSync(path, { recursive: true, force: true });
-  }
+  cleanupTemporary();
 });
-
-/** 建一个临时目录。 */
-function temporary(prefix: string): string {
-  const path = mkdtempSync(join(tmpdir(), prefix));
-  channels.push(path);
-  return path;
-}
-
-/** 在一个目录里建出一个有提交记录的仓库，并留下一处未提交改动。 */
-function initRepository(root: string): void {
-  const git = (...args: string[]): void => {
-    execFileSync("git", args, { cwd: root, stdio: "ignore" });
-  };
-  mkdirSync(root, { recursive: true });
-  git("init", "-q", "-b", "main");
-  mkdirSync(join(root, "notes"), { recursive: true });
-  writeFileSync(join(root, "notes", "a.md"), "第一行\n");
-  git("add", "-A");
-  git(
-    "-c",
-    "user.name=示例",
-    "-c",
-    "user.email=example@example.invalid",
-    "commit",
-    "-q",
-    "-m",
-    "初次提交",
-  );
-  writeFileSync(join(root, "notes", "a.md"), "第一行\n改过的一行\n");
-}
 
 /** 一次典型的答复：注册给频道，其余给一次成功的上报。 */
 function defaultReply(alias: string, channelId: string): (request: { path: string }) => Reply {
@@ -113,18 +78,6 @@ function peerRecord(options: {
   };
 }
 
-/** 一份内容，只有文件名与名称不同。 */
-function content(label: string, paths: readonly string[]): StatusPayload {
-  return {
-    label,
-    count: paths.length,
-    truncated: false,
-    paths: [...paths],
-    suspectFiles: [],
-    conflictFiles: [],
-  };
-}
-
 interface Fixture {
   readonly files: PluginFiles;
   readonly vaultRoot: string;
@@ -143,7 +96,7 @@ async function fixture(options: {
   readonly register?: boolean;
   readonly configure?: (config: Config) => Config;
 } = {}): Promise<Fixture> {
-  const base = temporary("waystation-engine-");
+  const base = temporaryDir("waystation-engine-");
   const files = pluginFiles(join(base, "plugin"));
   const vaultRoot = join(base, "vault");
   initRepository(vaultRoot);
@@ -264,7 +217,7 @@ describe("采集与上报", () => {
       channelId: "aa".repeat(16),
       sequence: 9,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/b.md"]),
+      payload: statusContent("示例设备乙", ["notes/b.md"]),
     });
 
     env.relay.reply = (request) =>
@@ -292,7 +245,7 @@ describe("采集与上报", () => {
         channelId: "aa".repeat(16),
         sequence,
         collectedAt: "2023-11-14T22:15:23Z",
-        payload: content("示例设备乙", []),
+        payload: statusContent("示例设备乙", []),
       });
     const behind = make(9);
     const ahead = make(15);
@@ -380,7 +333,7 @@ describe("合并对端状态", () => {
       channelId: "aa".repeat(16),
       sequence: 3,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/b.md"]),
+      payload: statusContent("示例设备乙", ["notes/b.md"]),
     });
     env.relay.reply = (request) =>
       request.path === "/v1/report"
@@ -406,7 +359,7 @@ describe("合并对端状态", () => {
       channelId: "aa".repeat(16),
       sequence: 1,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/a.md"]),
+      payload: statusContent("示例设备乙", ["notes/a.md"]),
     });
     env.relay.reply = () => ({
       status: 200,
@@ -431,7 +384,7 @@ describe("合并对端状态", () => {
       channelId: "aa".repeat(16),
       sequence: 1,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/b.md"]),
+      payload: statusContent("示例设备乙", ["notes/b.md"]),
     });
     // 指纹与公钥相符，但签名来自另一把钥匙。
     const forged: PeerRecord = { ...record, fingerprint: peer.fingerprint, publicKey: peer.publicKey };
@@ -456,7 +409,7 @@ describe("合并对端状态", () => {
       channelId: "aa".repeat(16),
       sequence: 1,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/b.md"]),
+      payload: statusContent("示例设备乙", ["notes/b.md"]),
     });
     env.relay.reply = () => ({
       status: 200,
@@ -480,7 +433,7 @@ describe("合并对端状态", () => {
       channelId: "aa".repeat(16),
       sequence: 2,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/b.md"]),
+      payload: statusContent("示例设备乙", ["notes/b.md"]),
     });
     const conflict = peerRecord({
       key: peer,
@@ -488,7 +441,7 @@ describe("合并对端状态", () => {
       channelId: "aa".repeat(16),
       sequence: 2,
       collectedAt: "2023-11-14T22:16:23Z",
-      payload: content("示例设备乙", ["notes/c.md"]),
+      payload: statusContent("示例设备乙", ["notes/c.md"]),
     });
     let round = 0;
     env.relay.reply = () => {
@@ -517,7 +470,7 @@ describe("合并对端状态", () => {
       channelId: "aa".repeat(16),
       sequence: 1,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/a.md"]),
+      payload: statusContent("示例设备乙", ["notes/a.md"]),
     });
     env.relay.reply = () => ({
       status: 200,
@@ -651,7 +604,7 @@ describe("内容密钥", () => {
       channelId: "aa".repeat(16),
       sequence: 1,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/b.md"]),
+      payload: statusContent("示例设备乙", ["notes/b.md"]),
     });
     env.relay.reply = () => ({
       status: 200,
@@ -726,7 +679,7 @@ describe("配置与缓存", () => {
       channelId: "aa".repeat(16),
       sequence: 1,
       collectedAt: "2023-11-14T22:15:23Z",
-      payload: content("示例设备乙", ["notes/b.md"]),
+      payload: statusContent("示例设备乙", ["notes/b.md"]),
     });
     env.relay.reply = () => ({
       status: 200,
