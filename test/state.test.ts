@@ -15,6 +15,7 @@ import {
 /** 构造一份记录内容，只写出用例关心的部分。 */
 function payload(overrides: Partial<StatusPayload> = {}): StatusPayload {
   return {
+    label: "",
     count: 0,
     truncated: false,
     paths: [],

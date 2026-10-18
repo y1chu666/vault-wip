@@ -58,6 +58,8 @@ describe("parseConfig", () => {
 
     expect(config.version).toBe(CONFIG_VERSION);
     expect(config.channel.alias).toBe("vault-example");
+    // 省略 device 一节时本设备没有名称，对端便只按指纹称呼。
+    expect(config.device).toEqual({ name: "" });
     expect(config.collect).toEqual({
       git: "",
       intervalSeconds: DEFAULT_INTERVAL_SECONDS,
@@ -77,6 +79,9 @@ describe("parseConfig", () => {
   it("读入完整配置", () => {
     const config = parsed(`
 version = 1
+
+[device]
+name = "示例设备甲"
 
 [channel]
 alias = "vault-example"
@@ -102,6 +107,7 @@ url = "http://relay.invalid:8080"
 transport = "plaintext"
 `);
 
+    expect(config.device.name).toBe("示例设备甲");
     expect(config.collect).toEqual({
       git: "/usr/bin/git",
       intervalSeconds: 30,
@@ -175,6 +181,30 @@ describe("parseConfig 的错误处理", () => {
 
   it("拒绝 channel 中不认识的配置项", () => {
     expect(failure(minimal.replace("alias = ", "alias_name = "))).toContain("不认识的配置项");
+  });
+
+  it("拒绝把 device 写成非表", () => {
+    expect(failure(`version = 1\ndevice = "示例设备甲"\n\n${channelBlock}${relayBlock}`)).toContain(
+      "device 应当是一张表",
+    );
+  });
+
+  it("拒绝 device 中不认识的配置项", () => {
+    expect(failure(`version = 1\n\n[device]\nlabel = "示例设备甲"\n\n${channelBlock}${relayBlock}`)).toContain(
+      "不认识的配置项：label",
+    );
+  });
+
+  it("拒绝过长的设备名称", () => {
+    expect(failure(`${minimal}\n[device]\nname = "${"甲".repeat(65)}"`)).toContain("最长 64 个字符");
+  });
+
+  it("拒绝含控制字符的设备名称", () => {
+    expect(failure(`${minimal}\n[device]\nname = "甲\\u0007乙"`)).toContain("控制字符");
+  });
+
+  it("拒绝类型不符的设备名称", () => {
+    expect(failure(`${minimal}\n[device]\nname = 1`)).toContain("device.name 应当是字符串");
   });
 
   it("拒绝超出范围的采集间隔", () => {

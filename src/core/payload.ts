@@ -11,8 +11,13 @@ export const MAX_PATHS = 1000;
 /** 路径长度上限。 */
 const MAX_PATH_LENGTH = 4096;
 
+/** 设备名称长度上限，与配置里的上限一致。 */
+const MAX_LABEL_LENGTH = 64;
+
 /** 状态记录的内容。 */
 export interface StatusPayload {
+  /** 本设备名称，由本设备自己写下；中继看不到它。 */
+  readonly label: string;
   /** 改动文件总数，可能大于清单长度。 */
   readonly count: number;
   /** 清单是否因超长而被截断。 */
@@ -35,6 +40,7 @@ export class StatusPayloadError extends Error {
 
 /** 由采集结果构造内容，并按上限截断文件名清单。 */
 export function buildStatusPayload(collected: {
+  readonly label: string;
   readonly paths: readonly string[];
   readonly suspectFiles: readonly string[];
   readonly conflictFiles: readonly string[];
@@ -43,6 +49,7 @@ export function buildStatusPayload(collected: {
   const truncated = paths.length > MAX_PATHS;
 
   return {
+    label: collected.label,
     count: paths.length,
     truncated,
     paths: truncated ? paths.slice(0, MAX_PATHS) : paths,
@@ -55,6 +62,7 @@ export function buildStatusPayload(collected: {
 export function encodeStatusPayload(payload: StatusPayload): Uint8Array {
   return encodeText(
     JSON.stringify({
+      label: payload.label,
       count: payload.count,
       truncated: payload.truncated,
       paths: payload.paths,
@@ -83,11 +91,19 @@ export function decodeStatusPayload(bytes: Uint8Array): StatusPayload {
   }
 
   const table = raw as Record<string, unknown>;
-  const allowed = ["count", "truncated", "paths", "suspectFiles", "conflictFiles"];
+  const allowed = ["label", "count", "truncated", "paths", "suspectFiles", "conflictFiles"];
   for (const key of Object.keys(table)) {
     if (!allowed.includes(key)) {
       throw new StatusPayloadError(`记录内容中不认识的字段：${key}`);
     }
+  }
+
+  const label = table["label"];
+  if (typeof label !== "string") {
+    throw new StatusPayloadError("记录内容中的设备名称不合规");
+  }
+  if (label.length > MAX_LABEL_LENGTH || hasControlCharacter(label)) {
+    throw new StatusPayloadError("记录内容中的设备名称不合规");
   }
 
   const count = table["count"];
@@ -105,12 +121,18 @@ export function decodeStatusPayload(bytes: Uint8Array): StatusPayload {
   }
 
   return {
+    label,
     count,
     truncated,
     paths,
     suspectFiles: readPaths(table["suspectFiles"], "suspectFiles"),
     conflictFiles: readPaths(table["conflictFiles"], "conflictFiles"),
   };
+}
+
+/** 名称里出现控制字符会破坏界面排版，也会让日志难以阅读。 */
+function hasControlCharacter(value: string): boolean {
+  return /[\u0000-\u001f\u007f]/.test(value);
 }
 
 function readPaths(value: unknown, field: string): string[] {

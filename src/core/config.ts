@@ -31,6 +31,7 @@ export const DEFAULT_REPEAT_SECONDS = 600;
 
 const MAX_RELAYS = 8;
 const MAX_ALIAS_LENGTH = 64;
+const MAX_DEVICE_NAME_LENGTH = 64;
 const MAX_RELAY_NAME_LENGTH = 32;
 const MIN_INTERVAL_SECONDS = 5;
 const MAX_INTERVAL_SECONDS = 3600;
@@ -65,6 +66,12 @@ export interface NotifySettings {
   readonly repeatSeconds: number;
 }
 
+/** 设备配置。 */
+export interface DeviceSettings {
+  /** 本设备名称。写进记录内容供对端辨认，中继看不到；留空时对端只按指纹称呼。 */
+  readonly name: string;
+}
+
 /** 频道配置。 */
 export interface ChannelSettings {
   /** 仓库别名，注册时按此名称请求频道。 */
@@ -74,6 +81,7 @@ export interface ChannelSettings {
 /** 一份完整的插件配置。 */
 export interface Config {
   readonly version: number;
+  readonly device: DeviceSettings;
   readonly channel: ChannelSettings;
   readonly collect: CollectSettings;
   readonly notify: NotifySettings;
@@ -102,12 +110,13 @@ export function parseConfig(text: string): Config {
   const raw = parseDocument(text);
 
   const problems: string[] = [];
-  checkKeys(raw, ["version", "channel", "collect", "notify", "relay"], "配置", problems);
+  checkKeys(raw, ["version", "device", "channel", "collect", "notify", "relay"], "配置", problems);
   const version = readInteger(raw, "version", "配置", problems);
   if (version !== undefined && version !== CONFIG_VERSION) {
     problems.push(`配置版本为 ${version}，本版本只认识 ${CONFIG_VERSION}`);
   }
 
+  const device = parseDevice(raw["device"], problems);
   const channel = parseChannel(raw["channel"], problems);
   const collect = parseCollect(raw["collect"], problems);
   const notify = parseNotify(raw["notify"], problems);
@@ -119,6 +128,7 @@ export function parseConfig(text: string): Config {
 
   return {
     version: CONFIG_VERSION,
+    device,
     channel,
     collect,
     notify,
@@ -135,6 +145,9 @@ export function parseConfig(text: string): Config {
 export function serializeConfig(config: Config): string {
   const document = {
     version: config.version,
+    device: {
+      name: config.device.name,
+    },
     channel: {
       alias: config.channel.alias,
     },
@@ -162,6 +175,7 @@ export function serializeConfig(config: Config): string {
 export function defaultConfig(alias: string): Config {
   return {
     version: CONFIG_VERSION,
+    device: { name: "" },
     channel: { alias },
     collect: {
       git: "",
@@ -188,6 +202,11 @@ export function templateConfig(alias: string): string {
 # 本文件不含任何秘密：设备私钥、内容密钥与钉住的中继公钥另行存放。
 
 version = 1
+
+[device]
+# 本设备名称，写进记录内容供对端辨认。中继看不到它，同仓库的其他设备才看得到。
+# 留空时对端只按指纹称呼本设备。
+name = ""
 
 [channel]
 # 仓库别名。设备在注册时按此名称请求频道，同一仓库的各设备应当写同一个名字。
@@ -227,6 +246,25 @@ function parseDocument(text: string): Record<string, unknown> {
   } catch (error) {
     throw new ConfigError(`配置不是合法的 TOML：${messageOf(error)}`);
   }
+}
+
+function parseDevice(value: unknown, problems: string[]): DeviceSettings {
+  if (value === undefined) {
+    return { name: "" };
+  }
+  if (!isTable(value)) {
+    problems.push("device 应当是一张表");
+    return { name: "" };
+  }
+
+  checkKeys(value, ["name"], "device", problems);
+  const name = readString(value, "name", "device", problems) ?? "";
+  if (name.length > MAX_DEVICE_NAME_LENGTH) {
+    problems.push(`device.name 最长 ${MAX_DEVICE_NAME_LENGTH} 个字符`);
+  } else if (containsControlCharacter(name)) {
+    problems.push("device.name 不能含有控制字符");
+  }
+  return { name };
 }
 
 function parseChannel(value: unknown, problems: string[]): ChannelSettings {

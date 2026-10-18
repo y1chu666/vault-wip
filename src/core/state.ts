@@ -119,6 +119,7 @@ export function payloadDigest(payload: StatusPayload): string {
   return digestHex(
     Buffer.from(
       JSON.stringify({
+        label: payload.label,
         count: payload.count,
         truncated: payload.truncated,
         paths: [...payload.paths].sort(),
