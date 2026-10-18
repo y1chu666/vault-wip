@@ -10,6 +10,8 @@ import {
   encodeContentKey,
   encryptContent,
   generateContentKey,
+  protectContentKey,
+  unprotectContentKey,
 } from "../src/core/crypto.js";
 
 const bytes = Buffer.from(Array.from({ length: 32 }, (_, index) => index + 1));
@@ -112,5 +114,74 @@ describe("encryptContent 与 decryptContent", () => {
 
   it("错误都属于同一种错误类型", () => {
     expect(() => decryptContent(key, Buffer.alloc(1))).toThrow(ContentCryptoError);
+  });
+});
+
+describe("口令封装的密钥", () => {
+  const passphrase = "示例口令一二三";
+
+  it("往返之后得到同一把密钥", () => {
+    const key = generateContentKey();
+
+    const text = protectContentKey(key, passphrase);
+
+    expect(text.startsWith("waystation-protected-key-v1:")).toBe(true);
+    expect(unprotectContentKey(text, passphrase).bytes).toEqual(key.bytes);
+  });
+
+  it("同一把密钥两次封装得到不同文本", () => {
+    const key = generateContentKey();
+
+    expect(protectContentKey(key, passphrase)).not.toBe(protectContentKey(key, passphrase));
+  });
+
+  it("口令不对时解不开", () => {
+    const text = protectContentKey(generateContentKey(), passphrase);
+
+    expect(() => unprotectContentKey(text, "别的口令")).toThrow(/口令不对/);
+  });
+
+  it("文本被改动时解不开", () => {
+    const text = protectContentKey(generateContentKey(), passphrase);
+    const body = Buffer.from(text.slice("waystation-protected-key-v1:".length), "base64url");
+    body[body.length - 1] = (body[body.length - 1] ?? 0) ^ 0xff;
+
+    expect(() => unprotectContentKey(`waystation-protected-key-v1:${body.toString("base64url")}`, passphrase)).toThrow(
+      /口令不对|已被改动/,
+    );
+  });
+
+  it("拒绝空口令与过长口令", () => {
+    expect(() => protectContentKey(generateContentKey(), "")).toThrow(/不能为空/);
+    expect(() => protectContentKey(generateContentKey(), "a".repeat(1025))).toThrow(/最长 1024/);
+    expect(() => unprotectContentKey("waystation-protected-key-v1:AAAA", "")).toThrow(/不能为空/);
+  });
+
+  it("拒绝不是本插件导出的文本", () => {
+    expect(() => unprotectContentKey("随手一段文本", passphrase)).toThrow(/不是本插件导出/);
+  });
+
+  it("拒绝过短的文本", () => {
+    expect(() => unprotectContentKey("waystation-protected-key-v1:AAAA", passphrase)).toThrow(/过短/);
+  });
+
+  it("拒绝版本不同的文本", () => {
+    const text = protectContentKey(generateContentKey(), passphrase);
+    const body = Buffer.from(text.slice("waystation-protected-key-v1:".length), "base64url");
+    body[0] = 9;
+
+    expect(() =>
+      unprotectContentKey(`waystation-protected-key-v1:${body.toString("base64url")}`, passphrase),
+    ).toThrow(/只认识 1/);
+  });
+
+  it("拒绝代价参数超出范围的文本", () => {
+    const text = protectContentKey(generateContentKey(), passphrase);
+    const body = Buffer.from(text.slice("waystation-protected-key-v1:".length), "base64url");
+    body[1] = 30;
+
+    expect(() =>
+      unprotectContentKey(`waystation-protected-key-v1:${body.toString("base64url")}`, passphrase),
+    ).toThrow(/超出允许范围/);
   });
 });

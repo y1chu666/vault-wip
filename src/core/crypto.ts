@@ -3,7 +3,14 @@
 // 记录内容用 AES-256-GCM 加密，密钥按仓库划分：中继只见到密文，
 // 拿不到文件名，也读不出改动情况。密文自带密钥标识，使一把密钥轮换之后
 // 旧记录仍可解出，无需保留旁表。
-import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from "node:crypto";
 
 /** 内容密钥的字节数。 */
 export const CONTENT_KEY_BYTES = 32;
@@ -22,6 +29,34 @@ const ENVELOPE_VERSION = 1;
 
 /** 密钥串的前缀，使一枚密钥一眼可辨，避免与其他文本混淆。 */
 const KEY_STRING_PREFIX = "waystation-key-v1:";
+
+/** 口令封装的前缀。与被封装的密钥串分开，两者一眼可辨。 */
+const PROTECTED_PREFIX = "waystation-protected-key-v1:";
+
+/** 口令封装的格式版本。 */
+const PROTECTED_VERSION = 1;
+
+/** 口令派生所用的盐长度。 */
+const SALT_BYTES = 16;
+
+/** 口令长度上限：过长的口令只会拖慢派生，实际收益有限。 */
+const MAX_PASSPHRASE_LENGTH = 1024;
+
+/**
+ * 口令派生所用代价参数的当前取值：N 为 2 的幂次、块大小与并行度。
+ *
+ * 这里用 scrypt 而不是通常首选的内存硬函数：插件只允许一个运行期依赖，
+ * 引入额外的密码学实现不划算，而 scrypt 由运行时直接提供，代价参数也已足够高。
+ * 口令分发本来就是三种分法中较弱的一种，界面上也照此标注。
+ */
+const SCRYPT_N_LOG2 = 15;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+
+/** 读回口令文件时允许的最大代价参数，避免别人递来的文件把内存吃光。 */
+const MAX_SCRYPT_N_LOG2 = 16;
+const MAX_SCRYPT_R = 16;
+const MAX_SCRYPT_P = 4;
 
 /** 内容密钥。 */
 export interface ContentKey {
@@ -81,6 +116,101 @@ export function decodeContentKey(text: string): ContentKey {
     throw new ContentCryptoError(`密钥串解出的长度为 ${bytes.length} 字节，期望 ${CONTENT_KEY_BYTES} 字节`);
   }
   return contentKeyFromBytes(bytes);
+}
+
+/**
+ * 用口令封起内容密钥，得到一段可以交给同仓库其他设备的文本。
+ *
+ * 这与密钥串本身是两种分发方式：口令封装的文本离开设备之后，还需要口令才能解开，
+ * 因此可以走不那麼可信的渠道；代价是口令往往比随机密钥串弱得多，界面上照此标注。
+ * 文本自带代价参数，将来调高参数也不会让旧文本失效。
+ */
+export function protectContentKey(key: ContentKey, passphrase: string): string {
+  checkPassphrase(passphrase);
+
+  const salt = randomBytes(SALT_BYTES);
+  const nonce = randomBytes(NONCE_BYTES);
+  const derived = deriveKey(passphrase, salt, SCRYPT_N_LOG2, SCRYPT_R, SCRYPT_P);
+  const cipher = createCipheriv("aes-256-gcm", derived, nonce, { authTagLength: TAG_BYTES });
+  const ciphertext = Buffer.concat([cipher.update(Buffer.from(key.bytes)), cipher.final()]);
+
+  const payload = Buffer.concat([
+    Buffer.from([PROTECTED_VERSION, SCRYPT_N_LOG2, SCRYPT_R, SCRYPT_P]),
+    salt,
+    nonce,
+    ciphertext,
+    cipher.getAuthTag(),
+  ]);
+  return PROTECTED_PREFIX + payload.toString("base64url");
+}
+
+/** 用口令解开口令封装的内容密钥。口令不对与文件被改动都归为同一种失败。 */
+export function unprotectContentKey(text: string, passphrase: string): ContentKey {
+  checkPassphrase(passphrase);
+
+  const trimmed = text.trim();
+  if (!trimmed.startsWith(PROTECTED_PREFIX)) {
+    throw new ContentCryptoError("这段文本不是本插件导出的口令文件");
+  }
+
+  const payload = Buffer.from(trimmed.slice(PROTECTED_PREFIX.length), "base64url");
+  const header = 4 + SALT_BYTES + NONCE_BYTES;
+  if (payload.length < header + CONTENT_KEY_BYTES + TAG_BYTES) {
+    throw new ContentCryptoError("口令文件过短，可能已损坏");
+  }
+  if (payload[0] !== PROTECTED_VERSION) {
+    throw new ContentCryptoError(
+      `口令文件的版本为 ${String(payload[0])}，本版本只认识 ${String(PROTECTED_VERSION)}`,
+    );
+  }
+
+  const nLog2 = payload[1] ?? 0;
+  const r = payload[2] ?? 0;
+  const p = payload[3] ?? 0;
+  if (nLog2 > MAX_SCRYPT_N_LOG2 || r > MAX_SCRYPT_R || p > MAX_SCRYPT_P) {
+    throw new ContentCryptoError("口令文件的代价参数超出允许范围");
+  }
+
+  const salt = payload.subarray(4, 4 + SALT_BYTES);
+  const nonce = payload.subarray(4 + SALT_BYTES, header);
+  const tag = payload.subarray(payload.length - TAG_BYTES);
+  const ciphertext = payload.subarray(header, payload.length - TAG_BYTES);
+  const derived = deriveKey(passphrase, salt, nLog2, r, p);
+
+  const decipher = createDecipheriv("aes-256-gcm", derived, nonce, { authTagLength: TAG_BYTES });
+  decipher.setAuthTag(tag);
+  let plaintext: Buffer;
+  try {
+    plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  } catch {
+    throw new ContentCryptoError("口令不对，或文件已被改动");
+  }
+  return contentKeyFromBytes(new Uint8Array(plaintext));
+}
+
+/** 由口令与盐派生出对称密钥。 */
+function deriveKey(passphrase: string, salt: Uint8Array, nLog2: number, r: number, p: number): Buffer {
+  try {
+    return scryptSync(passphrase, salt, CONTENT_KEY_BYTES, {
+      N: 2 ** nLog2,
+      r,
+      p,
+      // scrypt 的内存用量约为 128*N*r 字节，默认上限不够用，因此显式放宽。
+      maxmem: 256 * 1024 * 1024,
+    });
+  } catch (error) {
+    throw new ContentCryptoError(`口令派生失败：${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** 口令长度与字符范围都做限制：过长只会拖慢派生，空口令则毫无意义。 */
+function checkPassphrase(passphrase: string): void {
+  if (passphrase.length === 0) {
+    throw new ContentCryptoError("口令不能为空");
+  }
+  if (passphrase.length > MAX_PASSPHRASE_LENGTH) {
+    throw new ContentCryptoError(`口令最长 ${MAX_PASSPHRASE_LENGTH} 个字符`);
+  }
 }
 
 /**
