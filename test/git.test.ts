@@ -1,0 +1,357 @@
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import {
+  CollectError,
+  collectStatus,
+  createCommandRunner,
+  gitVersion,
+  normalizePath,
+  parseRawDiff,
+  parseStatusOutput,
+  type CommandResult,
+  type CommandRunner,
+} from "../src/core/git.js";
+
+/** 用 NUL 分隔的记录拼出一段输出，与 git 在 -z 下的写法一致。 */
+function nulJoin(fields: readonly string[]): Uint8Array {
+  return Buffer.from(`${fields.join("\u0000")}\u0000`, "utf8");
+}
+
+function result(stdout: Uint8Array, code = 0, stderr = ""): CommandResult {
+  return { code, stdout, stderr };
+}
+
+const statusFixture = nulJoin([
+  "# branch.oid f399e830dd10000958f87566b184f403ea168670",
+  "# branch.head main",
+  "# branch.upstream origin/main",
+  "# branch.ab +2 -1",
+  "1 .D N... 100644 100644 000000 286c5f5776916d7d7d5849988ca9d83e722cf9c2 286c5f5776916d7d7d5849988ca9d83e722cf9c2 notes/del.md",
+  "1 .M N... 100644 100644 100644 fbbee861521bd5355538b096fa3998541cd33909 fbbee861521bd5355538b096fa3998541cd33909 notes/eol.md",
+  "1 .M N... 100644 100644 100755 af17f6cc87e4d5e4adec0018cbb73d3e2bd008c8 af17f6cc87e4d5e4adec0018cbb73d3e2bd008c8 notes/mode.md",
+  "1 .M N... 100644 100644 100644 17e3475343c4c9b504473a7f0dc1d124cde7fa2a 17e3475343c4c9b504473a7f0dc1d124cde7fa2a notes/real.md",
+  "1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 6dc6f50f882402a0fda1e0ca2bbf1a1cd8a0c1e7 notes/added.md",
+  "2 R. N... 100644 100644 100644 5a0ed06b24bcbc1e5f46457f37f97ef7a1ff922f 5a0ed06b24bcbc1e5f46457f37f97ef7a1ff922f R100 notes/renamed.md",
+  "notes/old.md",
+  "? notes/new.md",
+  "? notes/带空格 的名字.md",
+]);
+
+const bareStatusFixture = nulJoin([
+  "# branch.oid f399e830dd10000958f87566b184f403ea168670",
+  "# branch.head (detached)",
+  "1 .M N... 100644 100644 100644 17e3475343c4c9b504473a7f0dc1d124cde7fa2a 17e3475343c4c9b504473a7f0dc1d124cde7fa2a notes/real.md",
+]);
+
+const unmergedStatusFixture = nulJoin([
+  "# branch.oid f399e830dd10000958f87566b184f403ea168670",
+  "# branch.head main",
+  "u UU N... 100644 100644 100644 100644 9f2c1d2b4c5e6f708192a3b4c5d6e7f8091a2b3c 3a1b2c3d4e5f60718293a4b5c6d7e8f901122334 5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f11223344 notes/merged.md",
+]);
+
+const unstagedDiffFixture = nulJoin([
+  ":100644 000000 286c5f5 0000000 D",
+  "notes/del.md",
+  ":100644 100755 af17f6c af17f6c M",
+  "notes/mode.md",
+  ":100644 100644 17e3475 06a4e62 M",
+  "notes/real.md",
+]);
+
+const stagedDiffFixture = nulJoin([
+  ":100644 100644 5a0ed06 5a0ed06 R100",
+  "notes/old.md",
+  "notes/renamed.md",
+]);
+
+describe("parseStatusOutput", () => {
+  it("读出分支、领先落后与各条改动", () => {
+    const parsed = parseStatusOutput(statusFixture);
+
+    expect(parsed.branch).toBe("main");
+    expect(parsed.ahead).toBe(2);
+    expect(parsed.behind).toBe(1);
+    expect(parsed.entries.map((entry) => entry.path)).toEqual([
+      "notes/del.md",
+      "notes/eol.md",
+      "notes/mode.md",
+      "notes/real.md",
+      "notes/added.md",
+      "notes/renamed.md",
+      "notes/new.md",
+      "notes/带空格 的名字.md",
+    ]);
+    expect(parsed.entries.map((entry) => entry.xy)).toEqual([".D", ".M", ".M", ".M", "A.", "R.", "??", "??"]);
+  });
+
+  it("分离头指针时不给出分支名", () => {
+    const parsed = parseStatusOutput(bareStatusFixture);
+
+    expect(parsed.branch).toBe("");
+    expect(parsed.ahead).toBe(0);
+    expect(parsed.behind).toBe(0);
+  });
+
+  it("保留含空格的路径", () => {
+    const parsed = parseStatusOutput(statusFixture);
+
+    expect(parsed.entries.at(-1)?.path).toBe("notes/带空格 的名字.md");
+  });
+
+  it("忽略空字段与未知记录", () => {
+    const parsed = parseStatusOutput(nulJoin(["", "# branch.head main", "x 未知记录", "# 只有一段", "1 .M N... 100644"]));
+
+    expect(parsed.branch).toBe("main");
+    expect(parsed.entries).toEqual([]);
+  });
+
+  it("计数写法不合规时按零计", () => {
+    const parsed = parseStatusOutput(nulJoin(["# branch.head main", "# branch.ab +abc -"]));
+
+    expect(parsed.ahead).toBe(0);
+    expect(parsed.behind).toBe(0);
+  });
+
+  it("把双方都新增的冲突也归入未合并", () => {
+    const parsed = parseStatusOutput(
+      nulJoin([
+        "# branch.head main",
+        "u AA N... 100644 100644 100644 100644 9f2c1d2b4c5e6f708192a3b4c5d6e7f8091a2b3c 3a1b2c3d4e5f60718293a4b5c6d7e8f901122334 5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f11223344 notes/both.md",
+      ]),
+    );
+
+    expect(parsed.entries[0]?.xy).toBe("AA");
+  });
+});
+
+describe("parseRawDiff", () => {
+  it("读出一条记录的模式、摘要与状态", () => {
+    const entries = parseRawDiff(unstagedDiffFixture);
+
+    expect(entries).toEqual([
+      {
+        srcMode: "100644",
+        dstMode: "000000",
+        srcHash: "286c5f5",
+        dstHash: "0000000",
+        status: "D",
+        path: "notes/del.md",
+      },
+      {
+        srcMode: "100644",
+        dstMode: "100755",
+        srcHash: "af17f6c",
+        dstHash: "af17f6c",
+        status: "M",
+        path: "notes/mode.md",
+      },
+      {
+        srcMode: "100644",
+        dstMode: "100644",
+        srcHash: "17e3475",
+        dstHash: "06a4e62",
+        status: "M",
+        path: "notes/real.md",
+      },
+    ]);
+  });
+
+  it("重命名记录只用改名后的路径，并跳过改名前的路径", () => {
+    const entries = parseRawDiff(stagedDiffFixture);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.status).toBe("R100");
+    expect(entries[0]?.path).toBe("notes/renamed.md");
+  });
+
+  it("复制记录同样取改动后的路径", () => {
+    const entries = parseRawDiff(
+      nulJoin([":100644 100644 5a0ed06 5a0ed06 C75", "notes/source.md", "notes/copy.md"]),
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.path).toBe("notes/copy.md");
+  });
+
+  it("忽略不成形的记录", () => {
+    expect(parseRawDiff(nulJoin(["没有前缀", ":不完整"]))).toEqual([]);
+    // 重命名记录少了后一个路径时不能把改名前的路径当成现名。
+    expect(parseRawDiff(nulJoin([":100644 100644 5a0ed06 5a0ed06 R100", "notes/source.md"]))).toEqual([]);
+  });
+});
+
+describe("normalizePath", () => {
+  it("统一为小写、斜杠与 Unicode 归一形式", () => {
+    expect(normalizePath("Notes/README.md")).toBe("notes/readme.md");
+    expect(normalizePath(".\\notes\\A.md")).toBe("notes/a.md");
+    expect(normalizePath("./notes/a.md")).toBe("notes/a.md");
+    // 同一个字符的组合写法与预组合写法归一后应当一致。
+    expect(normalizePath("notes/e\u0301.md")).toBe(normalizePath("notes/\u00e9.md"));
+  });
+});
+
+describe("collectStatus", () => {
+  /** 按调用参数返回预先准备的输出。 */
+  function stubRunner(overrides: Record<string, CommandResult> = {}): CommandRunner {
+    const defaults: Record<string, CommandResult> = {
+      "status --porcelain=v2 -z --branch": result(statusFixture),
+      "diff --raw -z --ignore-cr-at-eol": result(unstagedDiffFixture),
+      "diff --raw -z --ignore-cr-at-eol --cached": result(stagedDiffFixture),
+    };
+    const table = { ...defaults, ...overrides };
+
+    return (args) => Promise.resolve(table[args.join(" ")] ?? result(Buffer.alloc(0)));
+  }
+
+  it("给出归一后的改动清单与假冲突清单", async () => {
+    const collected = await collectStatus(stubRunner(), "/repo");
+
+    expect(collected.branch).toBe("main");
+    expect(collected.changes.map((change) => change.path)).toEqual([
+      "notes/del.md",
+      "notes/eol.md",
+      "notes/mode.md",
+      "notes/real.md",
+      "notes/added.md",
+      "notes/renamed.md",
+      "notes/new.md",
+      "notes/带空格 的名字.md",
+    ]);
+    expect(collected.changes.map((change) => change.kind)).toEqual([
+      "deleted",
+      "modified",
+      "modified",
+      "modified",
+      "added",
+      "renamed",
+      "untracked",
+      "untracked",
+    ]);
+    expect(collected.changes[7]?.display).toBe("notes/带空格 的名字.md");
+    // 行尾差异与权限差异都只影响措辞，因此单独列出来。
+    expect(collected.suspectFiles).toEqual(["notes/eol.md", "notes/mode.md"]);
+    expect(collected.conflicted).toEqual([]);
+  });
+
+  it("没有改动时不再多跑两次差异命令", async () => {
+    const calls: string[] = [];
+    const runner: CommandRunner = (args) => {
+      calls.push(args.join(" "));
+      if (args[0] === "status") {
+        return Promise.resolve(result(nulJoin(["# branch.head main"])));
+      }
+      return Promise.reject(new Error(`不该调用：${args.join(" ")}`));
+    };
+
+    const collected = await collectStatus(runner, "/repo");
+
+    expect(collected.changes).toEqual([]);
+    expect(calls).toEqual(["status --porcelain=v2 -z --branch"]);
+  });
+
+  it("把处于合并冲突的文件单列", async () => {
+    const collected = await collectStatus(
+      stubRunner({
+        "status --porcelain=v2 -z --branch": result(unmergedStatusFixture),
+        "diff --raw -z --ignore-cr-at-eol": result(Buffer.alloc(0)),
+        "diff --raw -z --ignore-cr-at-eol --cached": result(Buffer.alloc(0)),
+      }),
+      "/repo",
+    );
+
+    expect(collected.conflicted).toEqual(["notes/merged.md"]);
+    expect(collected.changes[0]?.kind).toBe("unmerged");
+  });
+
+  it("读取状态失败时给出仓库的报错首行", async () => {
+    const runner = stubRunner({
+      "status --porcelain=v2 -z --branch": result(Buffer.alloc(0), 128, "fatal: 不是一个 git 仓库\n第二行"),
+    });
+
+    await expect(collectStatus(runner, "/repo")).rejects.toThrow(/不是一个 git 仓库/);
+    await expect(collectStatus(runner, "/repo")).rejects.toBeInstanceOf(CollectError);
+  });
+});
+
+describe("真实仓库上的采集", () => {
+  let available = false;
+  let directory = "";
+
+  const git = createCommandRunner("");
+
+  beforeAll(async () => {
+    directory = await mkdtemp(join(tmpdir(), "waystation-collect-"));
+    try {
+      await gitVersion(git, directory);
+      available = true;
+    } catch {
+      available = false;
+      return;
+    }
+
+    const commit = async (message: string): Promise<void> => {
+      await git(["-c", "user.email=dev@example.invalid", "-c", "user.name=device-a", "commit", "-q", "-m", message], directory);
+    };
+
+    await git(["init", "-q", "-b", "main", "."], directory);
+    await git(["config", "core.fileMode", "true"], directory);
+    await mkdir(join(directory, "notes"), { recursive: true });
+    await writeFile(join(directory, "notes", "a.md"), "alpha\nbeta\n");
+    await writeFile(join(directory, "notes", "eol.md"), "alpha\nbeta\n");
+    await writeFile(join(directory, "notes", "mode.md"), "gamma\n");
+    await git(["add", "-A"], directory);
+    await commit("初始化");
+
+    await writeFile(join(directory, "notes", "a.md"), "alpha\nbeta\ndelta\n");
+    await writeFile(join(directory, "notes", "eol.md"), "alpha\r\nbeta\r\n");
+    await writeFile(join(directory, "notes", "new.md"), "新的文件\n");
+    await git(["update-index", "--chmod=+x", "notes/mode.md"], directory);
+  });
+
+  afterAll(async () => {
+    if (directory !== "") {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("在真实仓库上认出改动与假冲突", async () => {
+    if (!available) {
+      return;
+    }
+
+    const collected = await collectStatus(git, directory);
+    const paths = collected.changes.map((change) => change.path).sort();
+
+    expect(paths).toContain("notes/a.md");
+    expect(paths).toContain("notes/new.md");
+    expect(collected.branch).toBe("main");
+    expect(collected.suspectFiles).toContain("notes/eol.md");
+  });
+
+  it("对不存在的仓库给出可读的失败", async () => {
+    if (!available) {
+      return;
+    }
+
+    await expect(collectStatus(git, join(directory, "并不存在的目录"))).rejects.toBeInstanceOf(CollectError);
+  });
+
+  it("找不到 git 可执行文件时明确报错", async () => {
+    const missing = createCommandRunner("/并不存在的/git");
+
+    await expect(gitVersion(missing, directory)).rejects.toBeInstanceOf(CollectError);
+  });
+
+  it("git 迟迟不返回时放弃本次采集", async () => {
+    const script = join(directory, "slow.sh");
+    await writeFile(script, "#!/bin/sh\nsleep 5\n", { mode: 0o755 });
+
+    const runner = createCommandRunner(script, 200);
+
+    await expect(gitVersion(runner, directory)).rejects.toThrow(/未在 1 秒内返回/);
+  });
+});

@@ -11,7 +11,7 @@
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint .",
     "test": "vitest run --coverage",
     "test:watch": "vitest"
   },

@@ -1,0 +1,391 @@
+// 本模块负责采集本机仓库的未提交状态。
+//
+// 采集只读不写：所有调用都是查询类子命令，不做拉取、不做暂存、不改设置。
+// 输出解析与进程调用分开，解析部分以固定文本为输入，便于逐条固定行为；
+// 检查与比较一律使用归一后的路径，避免同一文件在不同平台上被判为两个。
+import { execFile } from "node:child_process";
+
+import { decodeText, decodePaths } from "./text.js";
+
+/** 一次外部命令的结果。 */
+export interface CommandResult {
+  /** 退出码。 */
+  readonly code: number;
+  /** 标准输出原文。 */
+  readonly stdout: Uint8Array;
+  /** 标准错误，供诊断显示。 */
+  readonly stderr: string;
+}
+
+/** 执行命令的方式。留成参数是为了让用例不必真的调用 git。 */
+export type CommandRunner = (args: readonly string[], cwd: string) => Promise<CommandResult>;
+
+/** 采集失败。消息面向使用者。 */
+export class CollectError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CollectError";
+  }
+}
+
+/** 单条改动的种类。 */
+export type ChangeKind = "modified" | "added" | "deleted" | "renamed" | "unmerged" | "untracked";
+
+/** 一条改动。 */
+export interface Change {
+  /** 归一后的路径，用于跨设备比较。 */
+  readonly path: string;
+  /** 仓库中原样的路径，仅用于本地显示。 */
+  readonly display: string;
+  readonly kind: ChangeKind;
+}
+
+/** 一次采集的结果。 */
+export interface CollectedStatus {
+  readonly branch: string;
+  readonly ahead: number;
+  readonly behind: number;
+  readonly changes: readonly Change[];
+  /** 疑似假冲突的路径：差异看来只是行尾或权限位。 */
+  readonly suspectFiles: readonly string[];
+  /** 处于合并冲突状态的文件。 */
+  readonly conflicted: readonly string[];
+}
+
+/** 已知的改动状态记录。 */
+interface StatusEntry {
+  readonly xy: string;
+  readonly path: string;
+}
+
+/** 一条 raw 差异记录。 */
+interface RawEntry {
+  readonly srcMode: string;
+  readonly dstMode: string;
+  readonly srcHash: string;
+  readonly dstHash: string;
+  readonly status: string;
+  readonly path: string;
+}
+
+const ZERO_HASH = "0000000000000000000000000000000000000000";
+
+/** 采集超时（毫秒）。仓库异常大或位于网络盘时宁可放弃一次采集，也不要挂住上报。 */
+const COLLECT_TIMEOUT_MS = 10_000;
+
+/** 默认的命令执行方式：不经外壳，直接调用可执行文件。 */
+export function createCommandRunner(gitPath: string, timeoutMs = COLLECT_TIMEOUT_MS): CommandRunner {
+  const executable = gitPath === "" ? "git" : gitPath;
+
+  return (args, cwd) =>
+    new Promise((resolve, reject) => {
+      execFile(
+        executable,
+        [...args],
+        {
+          cwd,
+          timeout: timeoutMs,
+          maxBuffer: 32 * 1024 * 1024,
+          // 取原始字节：路径与输出都不必经过一层字符串编码再解回来。
+          encoding: "buffer",
+          // 固定语言与关闭可选锁，使输出不随环境变化，也不与使用者的 git 操作互相干扰；
+          // 禁止交互式询问，避免在没有终端时静静等下去。
+          env: {
+            ...process.env,
+            LC_ALL: "C",
+            GIT_OPTIONAL_LOCKS: "0",
+            GIT_TERMINAL_PROMPT: "0",
+          },
+        },
+        (error, stdout, stderr) => {
+          const out = { stdout, stderr: stderr.toString("utf8") };
+          if (error === null) {
+            resolve({ code: 0, ...out });
+            return;
+          }
+          if (error.killed === true) {
+            reject(
+              new CollectError(`git 未在 ${String(Math.max(1, Math.round(timeoutMs / 1000)))} 秒内返回，本次采集放弃`),
+            );
+            return;
+          }
+          if (typeof error.code === "string") {
+            // 进程根本起不来时错误码是字符串，例如可执行文件不存在。
+            reject(new CollectError(`无法执行 ${executable}：${error.message}`));
+            return;
+          }
+          // 非零退出码交给调用方判断：不同子命令下它的含义不同。
+          resolve({ code: typeof error.code === "number" ? error.code : 1, ...out });
+        },
+      );
+    });
+}
+
+/** 检查 git 是否可用，并返回其版本。 */
+export async function gitVersion(runner: CommandRunner, cwd: string): Promise<string> {
+  const result = await runner(["--version"], cwd);
+  if (result.code !== 0) {
+    throw new CollectError("git 不可用，请检查 git 可执行文件路径设置");
+  }
+  return decodeText(result.stdout).trim();
+}
+
+/**
+ * 采集一次状态。
+ *
+ * 假冲突的判定只用于措辞：它依赖带行尾过滤的差异输出，因此仅在确实存在改动时才多跑两次 git。
+ */
+export async function collectStatus(runner: CommandRunner, cwd: string): Promise<CollectedStatus> {
+  const statusResult = await runner(["status", "--porcelain=v2", "-z", "--branch"], cwd);
+  if (statusResult.code !== 0) {
+    throw new CollectError(`读取仓库状态失败：${firstLine(statusResult.stderr)}`);
+  }
+
+  const parsed = parseStatusOutput(statusResult.stdout);
+  const changes = parsed.entries.map((entry) => ({
+    path: normalizePath(entry.path),
+    display: entry.path,
+    kind: kindOf(entry.xy),
+  }));
+
+  let suspectFiles: string[] = [];
+  if (changes.length > 0) {
+    suspectFiles = await detectFalseConflicts(runner, cwd, changes);
+  }
+
+  return {
+    branch: parsed.branch,
+    ahead: parsed.ahead,
+    behind: parsed.behind,
+    changes,
+    suspectFiles,
+    conflicted: changes.filter((change) => change.kind === "unmerged").map((change) => change.path),
+  };
+}
+
+/**
+ * 找出「看似有改动，实则无需担心」的文件。
+ *
+ * 判定依据是 git 自己的比较结果，而不是自行推断行尾或权限的处理方式：
+ * 加上忽略行尾差异的过滤后仍无差异，说明差异只在行尾；两侧内容一致而权限位不同，
+ * 说明差异只在权限位。两者都只影响提示措辞。
+ */
+async function detectFalseConflicts(
+  runner: CommandRunner,
+  cwd: string,
+  changes: readonly Change[],
+): Promise<string[]> {
+  const unstaged = parseRawDiff((await runDiff(runner, cwd, false)).stdout);
+  const staged = parseRawDiff((await runDiff(runner, cwd, true)).stdout);
+  const differed = new Set<string>([...unstaged, ...staged].map((entry) => normalizePath(entry.path)));
+
+  const suspects = new Set<string>();
+  for (const change of changes) {
+    if (change.kind === "modified" && !differed.has(change.path)) {
+      // 两侧都记为改动，忽略行尾后却没有差异，只可能是行尾不同。
+      suspects.add(change.path);
+    }
+  }
+  for (const entry of [...unstaged, ...staged]) {
+    if (isModeOnly(entry)) {
+      suspects.add(normalizePath(entry.path));
+    }
+  }
+  return [...suspects].sort();
+}
+
+function runDiff(runner: CommandRunner, cwd: string, staged: boolean): Promise<CommandResult> {
+  const args = ["diff", "--raw", "-z", "--ignore-cr-at-eol"];
+  if (staged) {
+    args.push("--cached");
+  }
+  return runner(args, cwd);
+}
+
+/** 同一个文件的两侧内容一致而权限位不同，即为仅权限差异。 */
+function isModeOnly(entry: RawEntry): boolean {
+  if (entry.srcHash === ZERO_HASH || entry.dstHash === ZERO_HASH || entry.srcHash !== entry.dstHash) {
+    return false;
+  }
+  return entry.srcMode !== entry.dstMode;
+}
+
+/** 解析 `git status --porcelain=v2 -z --branch` 的输出。 */
+export function parseStatusOutput(output: Uint8Array): {
+  branch: string;
+  ahead: number;
+  behind: number;
+  entries: StatusEntry[];
+} {
+  const fields = splitNullTerminated(output);
+  const entries: StatusEntry[] = [];
+  let branch = "";
+  let ahead = 0;
+  let behind = 0;
+
+  for (let index = 0; index < fields.length; index += 1) {
+    const record = fields[index];
+    if (record === undefined || record === "") {
+      continue;
+    }
+
+    if (record.startsWith("# ")) {
+      const [key, value] = splitOnce(record.slice(2), " ");
+      if (key === "branch.head" && value !== "(detached)") {
+        branch = value ?? "";
+      } else if (key === "branch.ab") {
+        const counts = (value ?? "").split(" ");
+        ahead = parseCount(counts[0], "+");
+        behind = parseCount(counts[1], "-");
+      }
+      continue;
+    }
+
+    const type = record[0];
+    if (type === "1") {
+      const parts = splitLimit(record, " ", 8);
+      const path = parts[8];
+      const xy = parts[1];
+      if (path !== undefined && xy !== undefined) {
+        entries.push({ xy, path });
+      }
+    } else if (type === "2") {
+      // 重命名记录把改名前的路径放在下一个字段，这里只用改名后的路径。
+      const parts = splitLimit(record, " ", 9);
+      const path = parts[9];
+      const xy = parts[1];
+      if (path !== undefined && xy !== undefined) {
+        entries.push({ xy, path });
+      }
+      index += 1;
+    } else if (type === "u") {
+      const parts = splitLimit(record, " ", 10);
+      const path = parts[10];
+      const xy = parts[1];
+      if (path !== undefined && xy !== undefined) {
+        entries.push({ xy, path });
+      }
+    } else if (type === "?") {
+      // 只取未跟踪文件；`!` 表示被忽略的文件，本插件不关心，也不必向 git 索要。
+      const path = record.slice(2);
+      if (path !== "") {
+        entries.push({ xy: "??", path });
+      }
+    }
+  }
+
+  return { branch, ahead, behind, entries };
+}
+
+/** 解析 `git diff --raw -z` 的输出。 */
+export function parseRawDiff(output: Uint8Array): RawEntry[] {
+  // 每条记录的元信息与路径各占一个 NUL 字段；重命名再多一个字段。
+  const fields = splitNullTerminated(output);
+  const entries: RawEntry[] = [];
+
+  for (let index = 0; index < fields.length; index += 1) {
+    const meta = fields[index];
+    if (meta === undefined || !meta.startsWith(":")) {
+      continue;
+    }
+
+    const parts = meta.slice(1).split(" ");
+    const [srcMode, dstMode, srcHash, dstHash, status] = parts;
+    const first = fields[index + 1];
+    const second = fields[index + 2];
+    if (
+      srcMode === undefined ||
+      dstMode === undefined ||
+      srcHash === undefined ||
+      dstHash === undefined ||
+      status === undefined ||
+      first === undefined
+    ) {
+      continue;
+    }
+
+    // 重命名与复制给出两个路径，顺序是先改动前、后改动后；这里只取改动后的那个。
+    const renamed = status.startsWith("R") || status.startsWith("C");
+    const path = renamed ? second : first;
+    if (path === undefined || path === "") {
+      continue;
+    }
+    index += renamed ? 2 : 1;
+
+    entries.push({ srcMode, dstMode, srcHash, dstHash, status, path });
+  }
+
+  return entries;
+}
+
+/** 把两字符的状态码归入一种改动。 */
+function kindOf(xy: string): ChangeKind {
+  if (xy === "??") {
+    return "untracked";
+  }
+  const index = xy[0] ?? ".";
+  const worktree = xy[1] ?? ".";
+  if (index === "U" || worktree === "U" || (index === "A" && worktree === "A") || (index === "D" && worktree === "D")) {
+    return "unmerged";
+  }
+  if (index === "R" || worktree === "R" || index === "C" || worktree === "C") {
+    return "renamed";
+  }
+  if (index === "D" || worktree === "D") {
+    return "deleted";
+  }
+  if (index === "A") {
+    return "added";
+  }
+  return "modified";
+}
+
+/**
+ * 归一化路径。
+ *
+ * 统一为小写并做 Unicode 归一，同时把分隔符统一成斜杠：同一文件在不同平台、
+ * 不同输入法下的写法可能不同，只有归一之后才能可靠地比对。
+ */
+export function normalizePath(path: string): string {
+  return path.normalize("NFC").replaceAll("\\", "/").replace(/^\.\//, "").toLowerCase();
+}
+
+function splitNullTerminated(output: Uint8Array): string[] {
+  return decodePaths(output).split("\u0000");
+}
+
+function splitOnce(text: string, separator: string): [string, string | undefined] {
+  const at = text.indexOf(separator);
+  if (at < 0) {
+    return [text, undefined];
+  }
+  return [text.slice(0, at), text.slice(at + separator.length)];
+}
+
+/** 按分隔符切分，末段保留其中的分隔符：路径本身可能含空格。 */
+function splitLimit(text: string, separator: string, count: number): string[] {
+  const parts: string[] = [];
+  let rest = text;
+  while (parts.length < count) {
+    const at = rest.indexOf(separator);
+    if (at < 0) {
+      break;
+    }
+    parts.push(rest.slice(0, at));
+    rest = rest.slice(at + separator.length);
+  }
+  parts.push(rest);
+  return parts;
+}
+
+function parseCount(value: string | undefined, sign: string): number {
+  if (value === undefined || !value.startsWith(sign)) {
+    return 0;
+  }
+  const count = Number.parseInt(value.slice(1), 10);
+  return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+}
+
+function firstLine(text: string): string {
+  return text.split("\n", 1)[0]?.trim() ?? "";
+}
