@@ -4,6 +4,9 @@
   "private": true,
   "description": "多端交替使用同一笔记仓库时，互相感知未提交改动",
   "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
