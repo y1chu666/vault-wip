@@ -19,7 +19,13 @@ export const STATE_VERSION = 1;
 const SECRET_MODE = 0o600;
 
 /** 密钥文件名，写进 .gitignore 的就是这些。 */
-export const SECRET_FILE_NAMES = ["device.key", "content.key"] as const;
+export const SECRET_FILE_NAMES = [
+  "device.key",
+  "content.key",
+  // 导出给其他设备的内容密钥文件与它的口令封装版本：默认也挡住，免得顺手提交上去。
+  "content-key.export",
+  "content-key.protected",
+] as const;
 
 /** 插件在本机的文件。 */
 export interface PluginFiles {

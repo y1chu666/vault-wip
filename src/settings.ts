@@ -1,0 +1,360 @@
+// 设置页：把配置文件的取值摆成一张表。
+//
+// 每次改动都重新序列化整份配置再写回文件：配置文件是取值的唯一来源，界面只是它的
+// 编辑器。写完立刻以新配置重建引擎，不必重载插件。
+import { App, PluginSettingTab, Setting } from "obsidian";
+
+import type { Config, TransportLevel } from "./core/config.js";
+import { parseConfig, serializeConfig } from "./core/config.js";
+import { readTextFile, writeTextFile } from "./core/storage.js";
+import type VaultWaystationPlugin from "./main.js";
+
+/** 把只读的取值类型变成可写，供设置页在副本上改一项。 */
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
+/** 配置文件的可写副本。 */
+interface ConfigDraft {
+  version: number;
+  device: { name: string };
+  channel: { alias: string };
+  collect: Mutable<Config["collect"]>;
+  notify: { repeatSeconds: number };
+  relay: Mutable<Config["relay"][number]>[];
+}
+
+/** 传输级别的取值与说明，顺序即推荐顺序。 */
+const TRANSPORTS: readonly (readonly [TransportLevel, string])[] = [
+  ["https", "公开证书（推荐）"],
+  ["pinned", "钉住自签证书"],
+  ["insecure", "忽略证书错误（降级）"],
+  ["plaintext", "明文（降级）"],
+];
+
+/** 采集节奏的可选档位（秒）。 */
+const INTERVAL_CHOICES = [5, 15, 30, 60, 300] as const;
+
+/** 提醒重提的档位（秒），0 表示关闭。 */
+const REPEAT_CHOICES = [0, 300, 600, 1800, 3600] as const;
+
+export class WaystationSettingTab extends PluginSettingTab {
+  private credential = "";
+
+  constructor(
+    app: App,
+    private readonly plugin: VaultWaystationPlugin,
+  ) {
+    super(app, plugin);
+  }
+
+  override display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    const error = this.plugin.configErrorText();
+    if (error !== null) {
+      new Setting(containerEl)
+        .setName("配置文件有误")
+        .setDesc(`${error}\n改正之后按下面的按钮重新读取。`);
+      new Setting(containerEl).addButton((button) =>
+        button.setButtonText("重新读取配置").onClick(() => {
+          void this.plugin.reload().then(() => {
+            this.display();
+          });
+        }),
+      );
+      const path = this.plugin.configPath();
+      if (path !== null) {
+        containerEl.createEl("p", { text: `配置文件：${path}` });
+      }
+      return;
+    }
+
+    const config = this.plugin.currentConfig();
+    if (config === null) {
+      containerEl.createEl("p", { text: "尚未就绪。" });
+      return;
+    }
+
+    this.renderDevice(config);
+    this.renderChannel(config);
+    this.renderCollect(config);
+    this.renderNotify(config);
+    this.renderRelays(config);
+    this.renderRegistration(config);
+    this.renderFooter();
+  }
+
+  /** 本设备：名称会写进加密的记录内容，中继看不到。 */
+  private renderDevice(config: Config): void {
+    new Setting(this.containerEl)
+      .setName("本设备名称")
+      .setDesc("写进加密的记录内容，供同仓库的其他设备辨认。中继看不到它。留空时对端只按指纹称呼本设备。")
+      .addText((text) =>
+        text
+          .setPlaceholder("例如：书房台式机")
+          .setValue(config.device.name)
+          .onChange((value) => {
+            this.edit((draft) => {
+              draft.device = { name: value.trim() };
+            });
+          }),
+      );
+  }
+
+  private renderChannel(config: Config): void {
+    new Setting(this.containerEl)
+      .setName("仓库别名")
+      .setDesc("注册时按这个名称请求频道，同一仓库的各设备要写同一个名字。")
+      .addText((text) =>
+        text.setValue(config.channel.alias).onChange((value) => {
+          this.edit((draft) => {
+            draft.channel = { alias: value.trim() };
+          });
+        }),
+      );
+  }
+
+  private renderCollect(config: Config): void {
+    new Setting(this.containerEl).setName("采集").setHeading();
+
+    new Setting(this.containerEl)
+      .setName("git 可执行文件")
+      .setDesc("留空表示从 PATH 中查找。")
+      .addText((text) =>
+        text.setPlaceholder("git").setValue(config.collect.git).onChange((value) => {
+          this.edit((draft) => {
+            draft.collect = { ...draft.collect, git: value.trim() };
+          });
+        }),
+      );
+
+    new Setting(this.containerEl)
+      .setName("定时采集间隔")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions(dropdownOptions(INTERVAL_CHOICES, (seconds) => `${String(seconds)} 秒`))
+          .setValue(String(config.collect.intervalSeconds))
+          .onChange((value) => {
+            this.edit((draft) => {
+              draft.collect = { ...draft.collect, intervalSeconds: Number(value) };
+            });
+          }),
+      );
+
+    new Setting(this.containerEl)
+      .setName("窗口失焦后多久降频")
+      .setDesc("0 表示不降频。")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions(dropdownOptions([0, 60, 300, 600], (seconds) => (seconds === 0 ? "不降频" : `${String(seconds)} 秒`)))
+          .setValue(String(config.collect.idleAfterSeconds))
+          .onChange((value) => {
+            this.edit((draft) => {
+              draft.collect = { ...draft.collect, idleAfterSeconds: Number(value) };
+            });
+          }),
+      );
+
+    new Setting(this.containerEl)
+      .setName("失焦后的采集间隔")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions(dropdownOptions([30, 60, 300, 600], (seconds) => `${String(seconds)} 秒`))
+          .setValue(String(config.collect.idleIntervalSeconds))
+          .onChange((value) => {
+            this.edit((draft) => {
+              draft.collect = { ...draft.collect, idleIntervalSeconds: Number(value) };
+            });
+          }),
+      );
+
+    new Setting(this.containerEl)
+      .setName("识别合并冲突的残留文件")
+      .setDesc("开启时会把留有合并痕迹的文件单独标出，只影响措辞，不影响是否算冲突。")
+      .addToggle((toggle) =>
+        toggle.setValue(config.collect.detectConflictFiles).onChange((value) => {
+          this.edit((draft) => {
+            draft.collect = { ...draft.collect, detectConflictFiles: value };
+          });
+        }),
+      );
+  }
+
+  private renderNotify(config: Config): void {
+    new Setting(this.containerEl).setName("提醒").setHeading();
+
+    new Setting(this.containerEl)
+      .setName("持续故障的重提醒间隔")
+      .setDesc("只在中继持续联系不上时使用；0 表示只在故障开始时提醒一次。")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions(
+            dropdownOptions(REPEAT_CHOICES, (seconds) =>
+              seconds === 0 ? "关闭重提醒" : `${String(seconds / 60)} 分钟`,
+            ),
+          )
+          .setValue(String(config.notify.repeatSeconds))
+          .onChange((value) => {
+            this.edit((draft) => {
+              draft.notify = { repeatSeconds: Number(value) };
+            });
+          }),
+      );
+  }
+
+  private renderRelays(config: Config): void {
+    new Setting(this.containerEl)
+      .setName("中继")
+      .setDesc("可以填多台；各中继之间互不相通，记录由本机搬运。传输级别与地址协议必须相符。")
+      .setHeading();
+
+    config.relay.forEach((relay: Config["relay"][number], index: number) => {
+      new Setting(this.containerEl)
+        .setName(`第 ${String(index + 1)} 台`)
+        .addText((text) =>
+          text.setPlaceholder("名称").setValue(relay.name).onChange((value) => {
+            this.updateRelay(index, { name: value.trim() });
+          }),
+        )
+        .addText((text) =>
+          text.setPlaceholder("https://relay.example.com:8787").setValue(relay.url).onChange((value) => {
+            this.updateRelay(index, { url: value.trim() });
+          }),
+        )
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOptions(dropdownOptions(TRANSPORTS.map(([level]) => level), (level) => labelOf(TRANSPORTS, level)))
+            .setValue(relay.transport)
+            .onChange((value: string) => {
+              this.updateRelay(index, { transport: value as TransportLevel });
+            }),
+        )
+        .addExtraButton((button) =>
+          button
+            .setIcon("trash")
+            .setTooltip("移除这一台")
+            .onClick(() => {
+              this.edit((draft) => {
+                draft.relay = draft.relay.filter((_, position) => position !== index);
+              });
+            }),
+        );
+    });
+
+    new Setting(this.containerEl).addButton((button) =>
+      button.setButtonText("添加一台中继").onClick(() => {
+        this.edit((draft) => {
+          draft.relay = [...draft.relay, { name: "", url: "", transport: "https" }];
+        });
+      }),
+    );
+  }
+
+  /** 注册凭证只在注册时出具一次，不写入配置，因此这里只放在内存里。 */
+  private renderRegistration(config: Config): void {
+    new Setting(this.containerEl).setName("注册").setHeading();
+
+    new Setting(this.containerEl)
+      .setName("注册凭证")
+      .setDesc(
+        config.relay.some((relay) => relay.transport === "insecure" || relay.transport === "plaintext")
+          ? "有中继处于降级传输，此时不允许注册；请先改回公开证书或钉住自签证书。"
+          : "向中继注册本仓库时需要出示一次。这份凭证不会写进配置文件。",
+      )
+      .addText((text) => {
+        text.setPlaceholder("凭证").onChange((value) => {
+          this.credential = value;
+        });
+        text.inputEl.type = "password";
+      })
+      .addButton((button) =>
+        button
+          .setButtonText("注册本仓库")
+          .setCta()
+          .onClick(() => {
+            void this.plugin.registerChannel(this.credential);
+          }),
+      );
+  }
+
+  private renderFooter(): void {
+    new Setting(this.containerEl).setName("文件").setHeading();
+    const path = this.plugin.configPath();
+    this.containerEl.createEl("p", {
+      text: `配置文件：${path ?? "未知"}`,
+    });
+    this.containerEl.createEl("p", {
+      text: "设备私钥、内容密钥与中继公钥另存于同一目录，已被该目录下的忽略清单挡住；请勿把它们纳入版本控制。",
+    });
+    const directory = this.plugin.pluginDirectory();
+    if (directory !== null) {
+      this.containerEl.createEl("p", { text: `插件目录：${directory}` });
+    }
+  }
+
+  /** 改一项配置：序列化整份写回，再让引擎以新配置继续。 */
+  private edit(mutate: (draft: ConfigDraft) => void): void {
+    const current = this.plugin.currentConfig();
+    if (current === null) {
+      return;
+    }
+    const draft = structuredClone(current) as ConfigDraft;
+    mutate(draft);
+    this.write(draft);
+  }
+
+  private updateRelay(index: number, patch: Partial<Config["relay"][number]>): void {
+    this.edit((draft) => {
+      const relay = draft.relay[index];
+      if (relay === undefined) {
+        return;
+      }
+      draft.relay = draft.relay.map((entry, position) =>
+        position === index ? { ...entry, ...patch } : entry,
+      );
+    });
+  }
+
+  private write(config: ConfigDraft): void {
+    const path = this.plugin.configPath();
+    if (path === null) {
+      return;
+    }
+    void writeTextFile(path, serializeConfig(config))
+      .then(() => loadAndApply(this.plugin))
+      .catch((error: unknown) => {
+        console.error("[vault-waystation] 配置写入失败", error);
+      });
+  }
+}
+
+/** 写回之后重新读一遍再交给引擎：解析器是唯一的把关者，界面不另设一套校验。 */
+async function loadAndApply(plugin: VaultWaystationPlugin): Promise<void> {
+  const path = plugin.configPath();
+  if (path === null) {
+    return;
+  }
+  const text = await readTextFile(path);
+  if (text === null) {
+    return;
+  }
+  try {
+    plugin.applyConfig(parseConfig(text));
+  } catch (error) {
+    console.error("[vault-waystation] 配置不合规", error);
+  }
+}
+
+/** 把档位列表变成下拉选项。 */
+function dropdownOptions<T>(values: readonly T[], label: (value: T) => string): Record<string, string> {
+  const options: Record<string, string> = {};
+  for (const value of values) {
+    options[String(value)] = label(value);
+  }
+  return options;
+}
+
+/** 取某个取值的说明文字。 */
+function labelOf<T>(pairs: readonly (readonly [T, string])[], value: T): string {
+  return pairs.find(([key]) => key === value)?.[1] ?? String(value);
+}

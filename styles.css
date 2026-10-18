@@ -1,0 +1,47 @@
+/* 状态视图的少量样式。取值一律用 Obsidian 的主题变量，跟随主题明暗。 */
+
+.waystation-view {
+  padding: 0.25em 0.5em;
+}
+
+.waystation-view h4 {
+  margin: 1em 0 0.35em;
+}
+
+.waystation-table td {
+  vertical-align: top;
+  padding-bottom: 0.15em;
+}
+
+.waystation-warning {
+  color: var(--text-warning);
+}
+
+.waystation-error {
+  color: var(--text-error);
+}
+
+.waystation-peer,
+.waystation-relay {
+  border-top: 1px solid var(--background-modifier-border);
+  margin-top: 0.6em;
+  padding-top: 0.4em;
+}
+
+.waystation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  align-items: center;
+  margin: 0.5em 0;
+}
+
+.waystation-textarea {
+  width: 100%;
+  min-height: 3em;
+}
+
+.waystation-flash {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
