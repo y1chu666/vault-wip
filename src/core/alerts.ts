@@ -1,0 +1,215 @@
+// 本模块决定什么时候弹出提示，以及提示怎么写。
+//
+// 提示一律只在窗口聚焦时弹出：编辑到一半被系统通知打断，比没有提示更烦人。
+// 真冲突、启动后对端有改动、持续故障与恢复各有各的去重规则，规则集中在这里，
+// 界面层只负责把给出的文字显示出来。
+import type { Conflict, DeviceStatus } from "./state.js";
+import { displayName } from "./state.js";
+
+/** 提醒配置。 */
+export interface AlertSettings {
+  /** 持续故障的重提醒间隔（秒），0 表示关闭重提醒。 */
+  readonly repeatSeconds: number;
+}
+
+/** 一条待弹出的提示。 */
+export interface Notice {
+  readonly kind: NoticeKind;
+  readonly title: string;
+  readonly body: string;
+}
+
+/** 提示的种类。 */
+export type NoticeKind = "conflict" | "peerChanges" | "failure" | "recovered";
+
+/** 持续故障的现状。 */
+export interface FailureState {
+  /** 故障开始时刻（毫秒）。 */
+  readonly since: number;
+  /** 面向使用者的原因。 */
+  readonly message: string;
+}
+
+/** 一次判断所需的输入。 */
+export interface AlertInput {
+  /** 当前时刻（毫秒）。 */
+  readonly now: number;
+  /** 窗口是否聚焦。 */
+  readonly focused: boolean;
+  /** 当前的真冲突。 */
+  readonly conflicts: readonly Conflict[];
+  /** 有未提交改动的对端。 */
+  readonly peersWithChanges: readonly DeviceStatus[];
+  /** 中继名，用于措辞。 */
+  readonly relayName: string;
+  /** 持续故障，恢复后为 null。 */
+  readonly failure: FailureState | null;
+}
+
+/** 提醒的判断。 */
+export class Alerts {
+  private readonly notifiedConflicts = new Set<string>();
+  private startupNotified = false;
+  private failureNotifiedAt: number | null = null;
+  private pendingRecovery = false;
+  private wasFailing = false;
+
+  constructor(private readonly settings: AlertSettings) {}
+
+  /**
+   * 给出本轮应当弹出的提示。
+   *
+   * 返回空数组表示什么都不弹：没有新情况，或窗口不在前台。
+   */
+  evaluate(input: AlertInput): Notice[] {
+    this.trackFailure(input);
+
+    if (!input.focused) {
+      return [];
+    }
+
+    const notices: Notice[] = [];
+    notices.push(...this.collectConflictNotices(input));
+    notices.push(...this.collectStartupNotice(input));
+    notices.push(...this.collectFailureNotice(input));
+    notices.push(...this.collectRecoveryNotice(input));
+    return notices;
+  }
+
+  /** 冲突提示：一个文件弹一次，该文件不再冲突后可以再次提示。 */
+  private collectConflictNotices(input: AlertInput): Notice[] {
+    const current = new Set(input.conflicts.map((conflict) => conflict.path));
+    for (const path of [...this.notifiedConflicts]) {
+      if (!current.has(path)) {
+        this.notifiedConflicts.delete(path);
+      }
+    }
+
+    const notices: Notice[] = [];
+    for (const conflict of input.conflicts) {
+      if (this.notifiedConflicts.has(conflict.path)) {
+        continue;
+      }
+      this.notifiedConflicts.add(conflict.path);
+      notices.push(conflictNotice(conflict, input.conflicts.length));
+    }
+    return notices;
+  }
+
+  /** 启动后的对端改动：每次启动只提示一次，且只有在对端确实有改动时提示。 */
+  private collectStartupNotice(input: AlertInput): Notice[] {
+    if (this.startupNotified || input.peersWithChanges.length === 0) {
+      return [];
+    }
+
+    this.startupNotified = true;
+    return [startupNotice(input.peersWithChanges)];
+  }
+
+  /** 持续故障：按配置的间隔重提醒，间隔为 0 表示只在开始时提示一次。 */
+  private collectFailureNotice(input: AlertInput): Notice[] {
+    if (input.failure === null) {
+      return [];
+    }
+
+    const repeatMs = this.settings.repeatSeconds * 1000;
+    if (this.failureNotifiedAt !== null && (repeatMs === 0 || input.now - this.failureNotifiedAt < repeatMs)) {
+      return [];
+    }
+
+    this.failureNotifiedAt = input.now;
+    return [failureNotice(input.relayName, input.failure, input.now)];
+  }
+
+  /** 恢复：故障消失后提示一次，即使当时窗口不在前台，也要留到聚焦时再报。 */
+  private collectRecoveryNotice(input: AlertInput): Notice[] {
+    if (!this.pendingRecovery) {
+      return [];
+    }
+
+    this.pendingRecovery = false;
+    return [recoveredNotice(input.relayName)];
+  }
+
+  private trackFailure(input: AlertInput): void {
+    if (input.failure !== null) {
+      this.wasFailing = true;
+      return;
+    }
+
+    if (this.wasFailing) {
+      this.pendingRecovery = true;
+      this.wasFailing = false;
+      this.failureNotifiedAt = null;
+    }
+  }
+}
+
+/** 冲突提示的文字。假冲突的判定只影响措辞，因此这里据实说明，不隐瞒也不夸大。 */
+export function conflictNotice(conflict: Conflict, total: number): Notice {
+  const names = conflict.peers.map((peer) => peer.name).join("、");
+  const subject = total > 1 ? `「${conflict.path}」等 ${String(total)} 个文件` : `「${conflict.path}」`;
+  const hint = conflictHint(conflict);
+
+  return {
+    kind: "conflict",
+    title: "可能冲突的改动",
+    body: `${subject}在本地与${names}上都有未提交改动，提交或拉取之前请先确认。${hint}`,
+  };
+}
+
+function conflictHint(conflict: Conflict): string {
+  if (conflict.localSuspect) {
+    return "本地这边的差异看来只是行尾或权限位，可能无需处理。";
+  }
+  if (conflict.peerSuspect) {
+    return "对端那边的差异看来只是行尾或权限位，可能无需处理。";
+  }
+  return "";
+}
+
+/** 启动提示的文字。 */
+export function startupNotice(peers: readonly DeviceStatus[]): Notice {
+  const described = peers
+    .map((peer) => `${displayName(peer)}有 ${String(peer.payload.count)} 处未提交改动`)
+    .join("；");
+
+  return {
+    kind: "peerChanges",
+    title: "对端有未提交改动",
+    body: `${described}，开始编辑之前请先留意。`,
+  };
+}
+
+/** 故障提示的文字。 */
+export function failureNotice(relayName: string, failure: FailureState, now: number): Notice {
+  const failureDuration = Math.max(0, Math.round((now - failure.since) / 1000));
+  return {
+    kind: "failure",
+    title: "中继不可达",
+    body: `已持续 ${formatDuration(failureDuration)}无法联系中继「${relayName}」：${failure.message}`,
+  };
+}
+
+/** 恢复提示的文字。 */
+export function recoveredNotice(relayName: string): Notice {
+  return {
+    kind: "recovered",
+    title: "中继已恢复",
+    body: `与中继「${relayName}」的联系已恢复，本地状态将照常上报。`,
+  };
+}
+
+/** 把秒数写成中文里的时长说法。 */
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${String(seconds)} 秒`;
+  }
+  if (seconds < 3600) {
+    return `${String(Math.floor(seconds / 60))} 分钟`;
+  }
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return minutes === 0 ? `${String(hours)} 小时` : `${String(hours)} 小时 ${String(minutes)} 分钟`;
+}
