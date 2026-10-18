@@ -1,0 +1,9 @@
+{
+  "id": "vault-waystation",
+  "name": "Vault Waystation",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Warns you before you edit a note that another of your devices left uncommitted.",
+  "author": "y1chu",
+  "isDesktopOnly": true
+}
