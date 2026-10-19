@@ -3,6 +3,7 @@
 // 提示一律只在窗口聚焦时弹出：编辑到一半被系统通知打断，比没有提示更烦人。
 // 真冲突、启动后对端有改动、持续故障与恢复各有各的去重规则，规则集中在这里，
 // 界面层只负责把给出的文字显示出来。
+import { t } from "./i18n.js";
 import type { Conflict, DeviceStatus } from "./state.js";
 import { displayName } from "./state.js";
 
@@ -147,23 +148,30 @@ export class Alerts {
 
 /** 冲突提示的文字。假冲突的判定只影响措辞，因此这里据实说明，不隐瞒也不夸大。 */
 export function conflictNotice(conflict: Conflict, total: number): Notice {
-  const names = conflict.peers.map((peer) => peer.name).join("、");
-  const subject = total > 1 ? `「${conflict.path}」等 ${String(total)} 个文件` : `「${conflict.path}」`;
+  const names = conflict.peers.map((peer) => peer.name).join(t("、"));
+  const subject =
+    total > 1
+      ? t("「{path}」等 {count} 个文件", { path: conflict.path, count: total })
+      : t("「{name}」", { name: conflict.path });
   const hint = conflictHint(conflict);
 
   return {
     kind: "conflict",
-    title: "可能冲突的改动",
-    body: `${subject}在本地与${names}上都有未提交改动，提交或拉取之前请先确认。${hint}`,
+    title: t("可能冲突的改动"),
+    body: t("{subject}在本地与{names}上都有未提交改动，提交或拉取之前请先确认。{hint}", {
+      subject,
+      names,
+      hint,
+    }),
   };
 }
 
 function conflictHint(conflict: Conflict): string {
   if (conflict.localSuspect) {
-    return "本地这边的差异看来只是行尾或权限位，可能无需处理。";
+    return t("本地这边的差异看来只是行尾或权限位，可能无需处理。");
   }
   if (conflict.peerSuspect) {
-    return "对端那边的差异看来只是行尾或权限位，可能无需处理。";
+    return t("对端那边的差异看来只是行尾或权限位，可能无需处理。");
   }
   return "";
 }
@@ -171,13 +179,13 @@ function conflictHint(conflict: Conflict): string {
 /** 启动提示的文字。 */
 export function startupNotice(peers: readonly DeviceStatus[]): Notice {
   const described = peers
-    .map((peer) => `${displayName(peer)}有 ${String(peer.payload.count)} 处未提交改动`)
-    .join("；");
+    .map((peer) => t("{name}有 {count} 处未提交改动", { name: displayName(peer), count: peer.payload.count }))
+    .join(t("；"));
 
   return {
     kind: "peerChanges",
-    title: "对端有未提交改动",
-    body: `${described}，开始编辑之前请先留意。`,
+    title: t("对端有未提交改动"),
+    body: t("{described}，开始编辑之前请先留意。", { described }),
   };
 }
 
@@ -186,8 +194,12 @@ export function failureNotice(relayName: string, failure: FailureState, now: num
   const failureDuration = Math.max(0, Math.round((now - failure.since) / 1000));
   return {
     kind: "failure",
-    title: "中继不可达",
-    body: `已持续 ${formatDuration(failureDuration)}无法联系中继「${relayName}」：${failure.message}`,
+    title: t("中继不可达"),
+    body: t("已持续 {duration}无法联系中继{relay}：{reason}", {
+      duration: formatDuration(failureDuration),
+      relay: t("「{name}」", { name: relayName }),
+      reason: failure.message,
+    }),
   };
 }
 
@@ -195,21 +207,23 @@ export function failureNotice(relayName: string, failure: FailureState, now: num
 export function recoveredNotice(relayName: string): Notice {
   return {
     kind: "recovered",
-    title: "中继已恢复",
-    body: `与中继「${relayName}」的联系已恢复，本地状态将照常上报。`,
+    title: t("中继已恢复"),
+    body: t("与中继{relay}的联系已恢复，本地状态将照常上报。", { relay: t("「{name}」", { name: relayName }) }),
   };
 }
 
 /** 把秒数写成中文里的时长说法。 */
 export function formatDuration(seconds: number): string {
   if (seconds < 60) {
-    return `${String(seconds)} 秒`;
+    return t("{seconds} 秒", { seconds });
   }
   if (seconds < 3600) {
-    return `${String(Math.floor(seconds / 60))} 分钟`;
+    return t("{minutes} 分钟", { minutes: Math.floor(seconds / 60) });
   }
 
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  return minutes === 0 ? `${String(hours)} 小时` : `${String(hours)} 小时 ${String(minutes)} 分钟`;
+  return minutes === 0
+    ? t("{hours} 小时", { hours })
+    : t("{hours} 小时 {minutes} 分钟", { hours, minutes });
 }

@@ -321,3 +321,36 @@ describe("isDegraded", () => {
     expect(isDegraded("plaintext")).toBe(true);
   });
 });
+
+describe("界面语言", () => {
+  it("不写这一项时跟随 Obsidian", () => {
+    expect(parsed(minimal).ui).toEqual({ language: "auto" });
+  });
+
+  it("可以固定成中文或英文", () => {
+    expect(parsed(`${channelBlock}[ui]\nlanguage = "en"\n${relayBlock}`).ui.language).toBe("en");
+    expect(parsed(`${channelBlock}[ui]\nlanguage = "zh"\n${relayBlock}`).ui.language).toBe("zh");
+  });
+
+  it("拒绝不认识的取值，并列出可取值", () => {
+    expect(failure(`${channelBlock}[ui]\nlanguage = "fr"\n${relayBlock}`)).toContain("ui.language 只能取");
+  });
+
+  it("拒绝 ui 一节里的多余键", () => {
+    expect(failure(`${channelBlock}[ui]\nlocale = "en"\n${relayBlock}`)).toContain("ui");
+  });
+
+  it("ui 不是一张表时如实说出来", () => {
+    expect(failure(`ui = 1\n${channelBlock}${relayBlock}`)).toContain("ui 应当是一张表");
+  });
+
+  it("写回之后仍然认得出这一项", () => {
+    const before = defaultConfig("vault-example");
+    const withEnglish: Config = { ...before, ui: { language: "en" } };
+    expect(parsed(serializeConfig(withEnglish)).ui.language).toBe("en");
+  });
+
+  it("首次生成的配置里带上这一项", () => {
+    expect(templateConfig("vault-example")).toContain("[ui]");
+  });
+});

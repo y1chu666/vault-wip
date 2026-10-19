@@ -14,6 +14,12 @@ export const TRANSPORT_LEVELS = ["https", "pinned", "insecure", "plaintext"] as 
 /** 传输级别。 */
 export type TransportLevel = (typeof TRANSPORT_LEVELS)[number];
 
+/** 界面语言的取值。auto 表示跟随 Obsidian 的界面语言。 */
+export const LANGUAGE_CHOICES = ["auto", "zh", "en"] as const;
+
+/** 界面语言的写法。 */
+export type LanguageChoice = (typeof LANGUAGE_CHOICES)[number];
+
 /** 重提醒的可选间隔（秒），0 表示关闭。 */
 export const REPEAT_SECONDS_CHOICES = [0, 300, 600, 1800, 3600] as const;
 
@@ -60,6 +66,12 @@ export interface CollectSettings {
   readonly detectConflictFiles: boolean;
 }
 
+/** 界面配置。 */
+export interface UiSettings {
+  /** 界面语言：跟随 Obsidian、恒用中文或恒用英文。 */
+  readonly language: LanguageChoice;
+}
+
 /** 提醒配置。 */
 export interface NotifySettings {
   /** 持续故障的重提醒间隔（秒），0 表示关闭。 */
@@ -85,6 +97,7 @@ export interface Config {
   readonly channel: ChannelSettings;
   readonly collect: CollectSettings;
   readonly notify: NotifySettings;
+  readonly ui: UiSettings;
   readonly relay: readonly RelaySettings[];
 }
 
@@ -94,6 +107,11 @@ export class ConfigError extends Error {
     super(message);
     this.name = "ConfigError";
   }
+}
+
+/** 取值是否是一种界面语言的写法。 */
+export function isLanguageChoice(value: unknown): value is LanguageChoice {
+  return typeof value === "string" && (LANGUAGE_CHOICES as readonly string[]).includes(value);
 }
 
 /** 传输级别是否属于降级：中间人可能在场的两级。 */
@@ -110,7 +128,7 @@ export function parseConfig(text: string): Config {
   const raw = parseDocument(text);
 
   const problems: string[] = [];
-  checkKeys(raw, ["version", "device", "channel", "collect", "notify", "relay"], "配置", problems);
+  checkKeys(raw, ["version", "device", "channel", "collect", "notify", "ui", "relay"], "配置", problems);
   const version = readInteger(raw, "version", "配置", problems);
   if (version !== undefined && version !== CONFIG_VERSION) {
     problems.push(`配置版本为 ${version}，本版本只认识 ${CONFIG_VERSION}`);
@@ -120,6 +138,7 @@ export function parseConfig(text: string): Config {
   const channel = parseChannel(raw["channel"], problems);
   const collect = parseCollect(raw["collect"], problems);
   const notify = parseNotify(raw["notify"], problems);
+  const ui = parseUi(raw["ui"], problems);
   const relay = parseRelays(raw["relay"], problems);
 
   if (problems.length > 0) {
@@ -132,6 +151,7 @@ export function parseConfig(text: string): Config {
     channel,
     collect,
     notify,
+    ui,
     relay,
   };
 }
@@ -161,6 +181,9 @@ export function serializeConfig(config: Config): string {
     notify: {
       repeat_seconds: config.notify.repeatSeconds,
     },
+    ui: {
+      language: config.ui.language,
+    },
     relay: config.relay.map((relay) => ({
       name: relay.name,
       url: relay.url,
@@ -185,6 +208,7 @@ export function defaultConfig(alias: string): Config {
       detectConflictFiles: true,
     },
     notify: { repeatSeconds: DEFAULT_REPEAT_SECONDS },
+    ui: { language: "auto" },
     relay: [{ name: "example", url: "https://relay.example.com:8787", transport: "pinned" }],
   };
 }
@@ -227,6 +251,11 @@ detect_conflict_files = true
 [notify]
 # 持续故障的重提醒间隔（秒），可取值 ${REPEAT_SECONDS_CHOICES.join("、")}，0 表示关闭。
 repeat_seconds = ${DEFAULT_REPEAT_SECONDS}
+
+[ui]
+# 界面语言，可取 ${LANGUAGE_CHOICES.join("、")}。auto 表示跟随 Obsidian 的界面语言；
+# 命令名只在插件重新加载之后才会跟着变。
+language = "auto"
 
 # 中继可以有多个，重复写若干段 [[relay]] 即可。
 # transport 可取 ${TRANSPORT_LEVELS.join("、")}；后两级的通信不加密或可被冒充，
@@ -356,6 +385,25 @@ function parseNotify(value: unknown, problems: string[]): NotifySettings {
     problems.push(`notify.repeat_seconds 只能取 ${REPEAT_SECONDS_CHOICES.join("、")}（秒）`);
   }
   return { repeatSeconds };
+}
+
+function parseUi(value: unknown, problems: string[]): UiSettings {
+  const fallback: UiSettings = { language: "auto" };
+  if (value === undefined) {
+    return fallback;
+  }
+  if (!isTable(value)) {
+    problems.push("ui 应当是一张表");
+    return fallback;
+  }
+
+  checkKeys(value, ["language"], "ui", problems);
+  const language = readString(value, "language", "ui", problems) ?? fallback.language;
+  if (!isLanguageChoice(language)) {
+    problems.push(`ui.language 只能取 ${LANGUAGE_CHOICES.join("、")}`);
+    return fallback;
+  }
+  return { language };
 }
 
 function parseRelays(value: unknown, problems: string[]): RelaySettings[] {

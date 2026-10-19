@@ -2,17 +2,33 @@
 //
 // 所有判断都在 src/core 里做完，这里只负责搬运：取插件目录、读配置、按节奏触发、
 // 把结果画到界面上。界面代码不进覆盖率统计，因此这里保持薄，能一眼看完。
-import { FileSystemAdapter, Notice, Plugin } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, getLanguage } from "obsidian";
 
 import type { Notice as EngineNotice } from "./core/alerts.js";
 import { parseConfig, templateConfig, type Config } from "./core/config.js";
 import { Engine, type EngineSnapshot } from "./core/engine.js";
+import { PLUGIN_NAME, getLocale, setLocale, t, type Locale } from "./core/i18n.js";
 import { pluginFiles, readTextFile, writeTextFile, type PluginFiles } from "./core/storage.js";
 import { WaystationSettingTab } from "./settings.js";
 import { VIEW_TYPE, WaystationView } from "./view.js";
 
-/** 状态栏与提醒里用的短名。 */
-const PLUGIN_NAME = "Vault Waystation";
+/** 提醒与状态栏统一带上插件名：通知中心里同时有几条时，先认得出是谁发的。 */
+function prefixed(text: string): string {
+  return t("{name}：{text}", { name: PLUGIN_NAME, text });
+}
+
+/**
+ * 按设置与 Obsidian 的界面语言算出用哪一套文案。
+ *
+ * 以「zh 开头」为界：中文及其变体都归中文，其余一律英文。清单里给出的语言代码
+ * 是 ISO 代码，因此在语言增补时不必跟着改这里。
+ */
+function localeFrom(choice: Config["ui"]["language"]): Locale {
+  if (choice !== "auto") {
+    return choice;
+  }
+  return getLanguage().toLowerCase().startsWith("zh") ? "zh" : "en";
+}
 
 export default class VaultWaystationPlugin extends Plugin {
   private engine: Engine | null = null;
@@ -21,6 +37,7 @@ export default class VaultWaystationPlugin extends Plugin {
   private configError: string | null = null;
   private timerId: number | null = null;
   private statusBar: HTMLElement | null = null;
+  private settingTab: WaystationSettingTab | null = null;
   private readonly views = new Set<WaystationView>();
 
   override async onload(): Promise<void> {
@@ -34,10 +51,11 @@ export default class VaultWaystationPlugin extends Plugin {
       return view;
     });
 
-    this.addRibbonIcon("radio-tower", `${PLUGIN_NAME}：查看各端状态`, () => {
+    this.addRibbonIcon("radio-tower", t("{name}：查看各端状态", { name: PLUGIN_NAME }), () => {
       void this.activateView();
     });
-    this.addSettingTab(new WaystationSettingTab(this.app, this));
+    this.settingTab = new WaystationSettingTab(this.app, this);
+    this.addSettingTab(this.settingTab);
 
     // 采集与上报分开：这些时机只影响「什么时候报一次」，报什么由采集决定。
     this.registerEvent(
@@ -85,7 +103,13 @@ export default class VaultWaystationPlugin extends Plugin {
   applyConfig(config: Config): void {
     this.currentValues = config;
     this.configError = null;
+    const before = getLocale();
+    setLocale(localeFrom(config.ui.language));
     this.engine?.setConfig(config);
+    if (getLocale() !== before) {
+      // 换了语言就重画设置页：文案已经变了，旧的那一屏不该继续留着。
+      this.settingTab?.display();
+    }
     this.refresh();
   }
 
@@ -110,8 +134,8 @@ export default class VaultWaystationPlugin extends Plugin {
 
     const directory = this.pluginDirectory();
     if (directory === null) {
-      this.configError = "本插件只在桌面端可用";
-      new Notice(`${PLUGIN_NAME}：${this.configError}`);
+      this.configError = t("本插件只在桌面端可用");
+      new Notice(prefixed(this.configError));
       return;
     }
 
@@ -138,6 +162,7 @@ export default class VaultWaystationPlugin extends Plugin {
 
     this.configError = null;
     this.currentValues = config;
+    setLocale(localeFrom(config.ui.language));
     this.engine = await Engine.create({
       files,
       config,
@@ -162,14 +187,14 @@ export default class VaultWaystationPlugin extends Plugin {
   async registerChannel(credential: string): Promise<void> {
     const engine = this.engine;
     if (engine === null) {
-      new Notice(`${PLUGIN_NAME}：配置尚未就绪`);
+      new Notice(prefixed(t("配置尚未就绪")));
       return;
     }
     try {
       await engine.register(credential);
-      new Notice(`${PLUGIN_NAME}：注册完成`);
+      new Notice(prefixed(t("注册完成")));
     } catch (error) {
-      new Notice(`${PLUGIN_NAME}：${describe(error)}`, 0);
+      new Notice(prefixed(describe(error)), 0);
     }
     this.refresh();
   }
@@ -182,9 +207,9 @@ export default class VaultWaystationPlugin extends Plugin {
     }
     try {
       await engine.revoke(fingerprint);
-      new Notice(`${PLUGIN_NAME}：已吊销设备 ${fingerprint.slice(0, 8)}`);
+      new Notice(prefixed(t("已吊销设备 {fingerprint}", { fingerprint: fingerprint.slice(0, 8) })));
     } catch (error) {
-      new Notice(`${PLUGIN_NAME}：${describe(error)}`, 0);
+      new Notice(prefixed(describe(error)), 0);
     }
     this.refresh();
   }
@@ -197,9 +222,9 @@ export default class VaultWaystationPlugin extends Plugin {
     }
     try {
       await engine.retire();
-      new Notice(`${PLUGIN_NAME}：本设备已退役，需要重新注册才能继续使用`);
+      new Notice(prefixed(t("本设备已退役，需要重新注册才能继续使用")));
     } catch (error) {
-      new Notice(`${PLUGIN_NAME}：${describe(error)}`, 0);
+      new Notice(prefixed(describe(error)), 0);
     }
     this.refresh();
   }
@@ -214,7 +239,7 @@ export default class VaultWaystationPlugin extends Plugin {
     try {
       return this.engine?.protectContentKeyWith(passphrase) ?? null;
     } catch (error) {
-      new Notice(`${PLUGIN_NAME}：${describe(error)}`, 0);
+      new Notice(prefixed(describe(error)), 0);
       return null;
     }
   }
@@ -231,9 +256,9 @@ export default class VaultWaystationPlugin extends Plugin {
       } else {
         await engine.adoptProtectedContentKey(text, passphrase);
       }
-      new Notice(`${PLUGIN_NAME}：已换用新的内容密钥`);
+      new Notice(prefixed(t("已换用新的内容密钥")));
     } catch (error) {
-      new Notice(`${PLUGIN_NAME}：${describe(error)}`, 0);
+      new Notice(prefixed(describe(error)), 0);
     }
     this.refresh();
   }
@@ -254,7 +279,7 @@ export default class VaultWaystationPlugin extends Plugin {
       await writeTextFile(path, `${text.trim()}\n`, 0o600);
       return path;
     } catch (error) {
-      new Notice(`${PLUGIN_NAME}：${describe(error)}`, 0);
+      new Notice(prefixed(describe(error)), 0);
       return null;
     }
   }
@@ -272,9 +297,9 @@ export default class VaultWaystationPlugin extends Plugin {
     }
     try {
       await engine.resetSequence();
-      new Notice(`${PLUGIN_NAME}：本机计数已重置`);
+      new Notice(prefixed(t("本机计数已重置")));
     } catch (error) {
-      new Notice(`${PLUGIN_NAME}：${describe(error)}`, 0);
+      new Notice(prefixed(describe(error)), 0);
     }
     this.refresh();
   }
@@ -367,33 +392,33 @@ export default class VaultWaystationPlugin extends Plugin {
 /** 状态栏上的一句话。 */
 export function statusText(snapshot: EngineSnapshot | null, configError: string | null): string {
   if (configError !== null) {
-    return `${PLUGIN_NAME}：配置有误`;
+    return prefixed(t("配置有误"));
   }
   if (snapshot === null) {
-    return `${PLUGIN_NAME}：未就绪`;
+    return prefixed(t("未就绪"));
   }
   if (snapshot.retired) {
-    return `${PLUGIN_NAME}：本设备已退役`;
+    return prefixed(t("本设备已退役"));
   }
 
   const parts: string[] = [];
   if (snapshot.relays.length === 0) {
-    parts.push("未配置中继");
+    parts.push(t("未配置中继"));
   } else {
     const reachable = snapshot.relays.filter((relay) => relay.lastFailure === null).length;
-    parts.push(`中继 ${String(reachable)}/${String(snapshot.relays.length)}`);
+    parts.push(t("中继 {reachable}/{total}", { reachable, total: snapshot.relays.length }));
   }
 
   if (snapshot.conflicts.length > 0) {
-    parts.push(`冲突 ${String(snapshot.conflicts.length)}`);
+    parts.push(t("冲突 {count}", { count: snapshot.conflicts.length }));
   } else {
     const changes = snapshot.peers.filter((peer) => peer.payload.count > 0).length;
     if (changes > 0) {
-      parts.push(`对端 ${String(changes)} 台有改动`);
+      parts.push(t("对端 {count} 台有改动", { count: changes }));
     }
   }
 
-  return `${PLUGIN_NAME}：${parts.join(" · ")}`;
+  return prefixed(parts.join(" · "));
 }
 
 /** 由仓库名给一个可用的频道别名。 */

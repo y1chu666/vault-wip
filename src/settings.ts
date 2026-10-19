@@ -5,7 +5,8 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 
 import type { Config, TransportLevel } from "./core/config.js";
-import { parseConfig, serializeConfig } from "./core/config.js";
+import { isLanguageChoice, parseConfig, serializeConfig } from "./core/config.js";
+import { t } from "./core/i18n.js";
 import { readTextFile, writeTextFile } from "./core/storage.js";
 import type VaultWaystationPlugin from "./main.js";
 
@@ -19,16 +20,26 @@ interface ConfigDraft {
   channel: { alias: string };
   collect: Mutable<Config["collect"]>;
   notify: { repeatSeconds: number };
+  ui: Mutable<Config["ui"]>;
   relay: Mutable<Config["relay"][number]>[];
 }
 
 /** 传输级别的取值与说明，顺序即推荐顺序。 */
-const TRANSPORTS: readonly (readonly [TransportLevel, string])[] = [
-  ["https", "公开证书（推荐）"],
-  ["pinned", "钉住自签证书"],
-  ["insecure", "忽略证书错误（降级）"],
-  ["plaintext", "明文（降级）"],
-];
+const TRANSPORTS: readonly TransportLevel[] = ["https", "pinned", "insecure", "plaintext"];
+
+/** 传输级别的说明。文案随语言变，因此不写死在取值表里。 */
+function transportLabel(level: TransportLevel): string {
+  switch (level) {
+    case "https":
+      return t("公开证书（推荐）");
+    case "pinned":
+      return t("钉住自签证书");
+    case "insecure":
+      return t("忽略证书错误（降级）");
+    case "plaintext":
+      return t("明文（降级）");
+  }
+}
 
 /** 采集节奏的可选档位（秒）。 */
 const INTERVAL_CHOICES = [5, 15, 30, 60, 300] as const;
@@ -53,10 +64,10 @@ export class WaystationSettingTab extends PluginSettingTab {
     const error = this.plugin.configErrorText();
     if (error !== null) {
       new Setting(containerEl)
-        .setName("配置文件有误")
-        .setDesc(`${error}\n改正之后按下面的按钮重新读取。`);
+        .setName(t("配置文件有误"))
+        .setDesc(`${error}\n${t("改正之后按下面的按钮重新读取。")}`);
       new Setting(containerEl).addButton((button) =>
-        button.setButtonText("重新读取配置").onClick(() => {
+        button.setButtonText(t("重新读取配置")).onClick(() => {
           void this.plugin.reload().then(() => {
             this.display();
           });
@@ -64,17 +75,18 @@ export class WaystationSettingTab extends PluginSettingTab {
       );
       const path = this.plugin.configPath();
       if (path !== null) {
-        containerEl.createEl("p", { text: `配置文件：${path}` });
+        containerEl.createEl("p", { text: t("配置文件：{path}", { path }) });
       }
       return;
     }
 
     const config = this.plugin.currentConfig();
     if (config === null) {
-      containerEl.createEl("p", { text: "尚未就绪。" });
+      containerEl.createEl("p", { text: t("尚未就绪。") });
       return;
     }
 
+    this.renderUi(config);
     this.renderDevice(config);
     this.renderChannel(config);
     this.renderCollect(config);
@@ -84,14 +96,38 @@ export class WaystationSettingTab extends PluginSettingTab {
     this.renderFooter();
   }
 
+  /** 界面：只影响本机看到的文字，与上报的内容无关。 */
+  private renderUi(config: Config): void {
+    new Setting(this.containerEl).setName(t("界面")).setHeading();
+
+    new Setting(this.containerEl)
+      .setName(t("界面语言"))
+      .setDesc(t("跟随 Obsidian 时按界面的语言取文案；命令名在插件重新加载之后才会跟着变。"))
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions({ auto: t("跟随 Obsidian"), zh: t("中文"), en: t("英文") })
+          .setValue(config.ui.language)
+          .onChange((value: string) => {
+            if (!isLanguageChoice(value)) {
+              return;
+            }
+            this.edit((draft) => {
+              draft.ui = { language: value };
+            });
+          }),
+      );
+  }
+
   /** 本设备：名称会写进加密的记录内容，中继看不到。 */
   private renderDevice(config: Config): void {
     new Setting(this.containerEl)
-      .setName("本设备名称")
-      .setDesc("写进加密的记录内容，供同仓库的其他设备辨认。中继看不到它。留空时对端只按指纹称呼本设备。")
+      .setName(t("本设备名称"))
+      .setDesc(
+        t("写进加密的记录内容，供同仓库的其他设备辨认。中继看不到它。留空时对端只按指纹称呼本设备。"),
+      )
       .addText((text) =>
         text
-          .setPlaceholder("例如：书房台式机")
+          .setPlaceholder(t("例如：书房台式机"))
           .setValue(config.device.name)
           .onChange((value) => {
             this.edit((draft) => {
@@ -103,8 +139,8 @@ export class WaystationSettingTab extends PluginSettingTab {
 
   private renderChannel(config: Config): void {
     new Setting(this.containerEl)
-      .setName("仓库别名")
-      .setDesc("注册时按这个名称请求频道，同一仓库的各设备要写同一个名字。")
+      .setName(t("仓库别名"))
+      .setDesc(t("注册时按这个名称请求频道，同一仓库的各设备要写同一个名字。"))
       .addText((text) =>
         text.setValue(config.channel.alias).onChange((value) => {
           this.edit((draft) => {
@@ -115,11 +151,11 @@ export class WaystationSettingTab extends PluginSettingTab {
   }
 
   private renderCollect(config: Config): void {
-    new Setting(this.containerEl).setName("采集").setHeading();
+    new Setting(this.containerEl).setName(t("采集")).setHeading();
 
     new Setting(this.containerEl)
-      .setName("git 可执行文件")
-      .setDesc("留空表示从 PATH 中查找。")
+      .setName(t("git 可执行文件"))
+      .setDesc(t("留空表示从 PATH 中查找。"))
       .addText((text) =>
         text.setPlaceholder("git").setValue(config.collect.git).onChange((value) => {
           this.edit((draft) => {
@@ -129,10 +165,10 @@ export class WaystationSettingTab extends PluginSettingTab {
       );
 
     new Setting(this.containerEl)
-      .setName("定时采集间隔")
+      .setName(t("定时采集间隔"))
       .addDropdown((dropdown) =>
         dropdown
-          .addOptions(dropdownOptions(INTERVAL_CHOICES, (seconds) => `${String(seconds)} 秒`))
+          .addOptions(dropdownOptions(INTERVAL_CHOICES, (seconds) => t("{seconds} 秒", { seconds })))
           .setValue(String(config.collect.intervalSeconds))
           .onChange((value) => {
             this.edit((draft) => {
@@ -142,11 +178,15 @@ export class WaystationSettingTab extends PluginSettingTab {
       );
 
     new Setting(this.containerEl)
-      .setName("窗口失焦后多久降频")
-      .setDesc("0 表示不降频。")
+      .setName(t("窗口失焦后多久降频"))
+      .setDesc(t("0 表示不降频。"))
       .addDropdown((dropdown) =>
         dropdown
-          .addOptions(dropdownOptions([0, 60, 300, 600], (seconds) => (seconds === 0 ? "不降频" : `${String(seconds)} 秒`)))
+          .addOptions(
+            dropdownOptions([0, 60, 300, 600], (seconds) =>
+              seconds === 0 ? t("不降频") : t("{seconds} 秒", { seconds }),
+            ),
+          )
           .setValue(String(config.collect.idleAfterSeconds))
           .onChange((value) => {
             this.edit((draft) => {
@@ -156,10 +196,10 @@ export class WaystationSettingTab extends PluginSettingTab {
       );
 
     new Setting(this.containerEl)
-      .setName("失焦后的采集间隔")
+      .setName(t("失焦后的采集间隔"))
       .addDropdown((dropdown) =>
         dropdown
-          .addOptions(dropdownOptions([30, 60, 300, 600], (seconds) => `${String(seconds)} 秒`))
+          .addOptions(dropdownOptions([30, 60, 300, 600], (seconds) => t("{seconds} 秒", { seconds })))
           .setValue(String(config.collect.idleIntervalSeconds))
           .onChange((value) => {
             this.edit((draft) => {
@@ -169,8 +209,8 @@ export class WaystationSettingTab extends PluginSettingTab {
       );
 
     new Setting(this.containerEl)
-      .setName("识别合并冲突的残留文件")
-      .setDesc("开启时会把留有合并痕迹的文件单独标出，只影响措辞，不影响是否算冲突。")
+      .setName(t("识别合并冲突的残留文件"))
+      .setDesc(t("开启时会把留有合并痕迹的文件单独标出，只影响措辞，不影响是否算冲突。"))
       .addToggle((toggle) =>
         toggle.setValue(config.collect.detectConflictFiles).onChange((value) => {
           this.edit((draft) => {
@@ -181,16 +221,16 @@ export class WaystationSettingTab extends PluginSettingTab {
   }
 
   private renderNotify(config: Config): void {
-    new Setting(this.containerEl).setName("提醒").setHeading();
+    new Setting(this.containerEl).setName(t("提醒")).setHeading();
 
     new Setting(this.containerEl)
-      .setName("持续故障的重提醒间隔")
-      .setDesc("只在中继持续联系不上时使用；0 表示只在故障开始时提醒一次。")
+      .setName(t("持续故障的重提醒间隔"))
+      .setDesc(t("只在中继持续联系不上时使用；0 表示只在故障开始时提醒一次。"))
       .addDropdown((dropdown) =>
         dropdown
           .addOptions(
             dropdownOptions(REPEAT_CHOICES, (seconds) =>
-              seconds === 0 ? "关闭重提醒" : `${String(seconds / 60)} 分钟`,
+              seconds === 0 ? t("关闭重提醒") : t("{minutes} 分钟", { minutes: seconds / 60 }),
             ),
           )
           .setValue(String(config.notify.repeatSeconds))
@@ -204,15 +244,15 @@ export class WaystationSettingTab extends PluginSettingTab {
 
   private renderRelays(config: Config): void {
     new Setting(this.containerEl)
-      .setName("中继")
-      .setDesc("可以填多台；各中继之间互不相通，记录由本机搬运。传输级别与地址协议必须相符。")
+      .setName(t("中继"))
+      .setDesc(t("可以填多台；各中继之间互不相通，记录由本机搬运。传输级别与地址协议必须相符。"))
       .setHeading();
 
     config.relay.forEach((relay: Config["relay"][number], index: number) => {
       new Setting(this.containerEl)
-        .setName(`第 ${String(index + 1)} 台`)
+        .setName(t("第 {index} 台", { index: index + 1 }))
         .addText((text) =>
-          text.setPlaceholder("名称").setValue(relay.name).onChange((value) => {
+          text.setPlaceholder(t("名称")).setValue(relay.name).onChange((value) => {
             this.updateRelay(index, { name: value.trim() });
           }),
         )
@@ -223,7 +263,7 @@ export class WaystationSettingTab extends PluginSettingTab {
         )
         .addDropdown((dropdown) =>
           dropdown
-            .addOptions(dropdownOptions(TRANSPORTS.map(([level]) => level), (level) => labelOf(TRANSPORTS, level)))
+            .addOptions(dropdownOptions(TRANSPORTS, transportLabel))
             .setValue(relay.transport)
             .onChange((value: string) => {
               this.updateRelay(index, { transport: value as TransportLevel });
@@ -232,7 +272,7 @@ export class WaystationSettingTab extends PluginSettingTab {
         .addExtraButton((button) =>
           button
             .setIcon("trash")
-            .setTooltip("移除这一台")
+            .setTooltip(t("移除这一台"))
             .onClick(() => {
               this.edit((draft) => {
                 draft.relay = draft.relay.filter((_, position) => position !== index);
@@ -242,7 +282,7 @@ export class WaystationSettingTab extends PluginSettingTab {
     });
 
     new Setting(this.containerEl).addButton((button) =>
-      button.setButtonText("添加一台中继").onClick(() => {
+      button.setButtonText(t("添加一台中继")).onClick(() => {
         this.edit((draft) => {
           draft.relay = [...draft.relay, { name: "", url: "", transport: "https" }];
         });
@@ -252,24 +292,24 @@ export class WaystationSettingTab extends PluginSettingTab {
 
   /** 注册凭证只在注册时出具一次，不写入配置，因此这里只放在内存里。 */
   private renderRegistration(config: Config): void {
-    new Setting(this.containerEl).setName("注册").setHeading();
+    new Setting(this.containerEl).setName(t("注册")).setHeading();
 
     new Setting(this.containerEl)
-      .setName("注册凭证")
+      .setName(t("注册凭证"))
       .setDesc(
         config.relay.some((relay) => relay.transport === "insecure" || relay.transport === "plaintext")
-          ? "有中继处于降级传输，此时不允许注册；请先改回公开证书或钉住自签证书。"
-          : "向中继注册本仓库时需要出示一次。这份凭证不会写进配置文件。",
+          ? t("有中继处于降级传输，此时不允许注册；请先改回公开证书或钉住自签证书。")
+          : t("向中继注册本仓库时需要出示一次。这份凭证不会写进配置文件。"),
       )
       .addText((text) => {
-        text.setPlaceholder("凭证").onChange((value) => {
+        text.setPlaceholder(t("凭证")).onChange((value) => {
           this.credential = value;
         });
         text.inputEl.type = "password";
       })
       .addButton((button) =>
         button
-          .setButtonText("注册本仓库")
+          .setButtonText(t("注册本仓库"))
           .setCta()
           .onClick(() => {
             void this.plugin.registerChannel(this.credential);
@@ -278,17 +318,17 @@ export class WaystationSettingTab extends PluginSettingTab {
   }
 
   private renderFooter(): void {
-    new Setting(this.containerEl).setName("文件").setHeading();
+    new Setting(this.containerEl).setName(t("文件")).setHeading();
     const path = this.plugin.configPath();
     this.containerEl.createEl("p", {
-      text: `配置文件：${path ?? "未知"}`,
+      text: t("配置文件：{path}", { path: path ?? t("未知") }),
     });
     this.containerEl.createEl("p", {
-      text: "设备私钥、内容密钥与中继公钥另存于同一目录，已被该目录下的忽略清单挡住；请勿把它们纳入版本控制。",
+      text: t("设备私钥、内容密钥与中继公钥另存于同一目录，已被该目录下的忽略清单挡住；请勿把它们纳入版本控制。"),
     });
     const directory = this.plugin.pluginDirectory();
     if (directory !== null) {
-      this.containerEl.createEl("p", { text: `插件目录：${directory}` });
+      this.containerEl.createEl("p", { text: t("插件目录：{path}", { path: directory }) });
     }
   }
 
@@ -352,9 +392,4 @@ function dropdownOptions<T>(values: readonly T[], label: (value: T) => string): 
     options[String(value)] = label(value);
   }
   return options;
-}
-
-/** 取某个取值的说明文字。 */
-function labelOf<T>(pairs: readonly (readonly [T, string])[], value: T): string {
-  return pairs.find(([key]) => key === value)?.[1] ?? String(value);
 }
