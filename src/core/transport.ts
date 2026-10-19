@@ -107,18 +107,24 @@ export async function send(request: TransportRequest): Promise<TransportResponse
       outgoing.on("socket", (socket) => {
         const tls = socket as TLSSocket;
         tls.on("secureConnect", () => {
-          const certificate = tls.getPeerCertificate(true);
-          if (certificate.raw === undefined) {
-            if (request.level === "pinned") {
-              outgoing.destroy(new TransportError("certificate", "对方没有给出证书"));
+          // 这段在事件回调里执行：抛出的异常没有调用方接住，会一路逃逸成进程级
+          // 未捕获异常。因此这里把一切都收进 try，出问题一律按证书类错误处理。
+          try {
+            const certificate = tls.getPeerCertificate(true);
+            if (certificate.raw === undefined) {
+              if (request.level === "pinned") {
+                outgoing.destroy(new TransportError("certificate", "对方没有给出证书"));
+              }
+              return;
             }
-            return;
-          }
-          observed = spkiFingerprint(certificate.raw);
-          if (request.level === "pinned" && request.spki !== null && observed !== request.spki) {
-            outgoing.destroy(
-              new TransportError("certificate", `中继证书的公钥指纹与钉住的值不同：${observed}`),
-            );
+            observed = spkiFingerprint(certificate.raw);
+            if (request.level === "pinned" && request.spki !== null && observed !== request.spki) {
+              outgoing.destroy(
+                new TransportError("certificate", `中继证书的公钥指纹与钉住的值不同：${observed}`),
+              );
+            }
+          } catch (error) {
+            outgoing.destroy(new TransportError("certificate", `核对中继证书时出错：${messageOf(error)}`));
           }
         });
       });

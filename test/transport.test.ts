@@ -7,10 +7,30 @@ import { X509Certificate } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { MAX_RESPONSE_BYTES, TransportError, send, spkiFingerprint } from "../src/core/transport.js";
 import type { TransportLevel } from "../src/core/config.js";
+
+/**
+ * 证书解析这一步在 TLS 事件回调里执行，抛出的异常没有调用方接住，会逃逸成进程级
+ * 未捕获异常。为了能固定这一处的处置方式，这里把 X509Certificate 换成可开关的替身：
+ * 关着时与原生一致，打开时模拟解析失败。
+ */
+let breakCertificate = false;
+
+vi.mock("node:crypto", async () => {
+  const actual = await vi.importActual<typeof import("node:crypto")>("node:crypto");
+  class GuardedCertificate extends actual.X509Certificate {
+    constructor(raw: Buffer) {
+      if (breakCertificate) {
+        throw new Error("证书解析失败");
+      }
+      super(raw);
+    }
+  }
+  return { ...actual, X509Certificate: GuardedCertificate };
+});
 
 /** 测试用的自签证书。仓库里不放证书，用到时现场生成。 */
 const certificateDir = mkdtempSync(join(tmpdir(), "waystation-tls-"));
@@ -150,6 +170,17 @@ describe("send", () => {
       await expect(call(relay, "pinned", wrong)).rejects.toThrow(/公钥指纹与钉住的值不同/);
       expect(relay.requests).toHaveLength(0);
     } finally {
+      await relay.close();
+    }
+  });
+
+  it("证书解析出错时归为证书问题，不让异常逃逸", async () => {
+    const relay = await startRelay({ secured: true });
+    breakCertificate = true;
+    try {
+      await expect(call(relay, "pinned", certificate.spki)).rejects.toMatchObject({ kind: "certificate" });
+    } finally {
+      breakCertificate = false;
       await relay.close();
     }
   });
