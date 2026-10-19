@@ -755,6 +755,33 @@ describe("序号与回应上限", () => {
     expect(report?.body["sequence"]).toBe(1);
   });
 
+  it("中继把本机序号顶到上界时不予采信", async () => {
+    // 采信它会让本机计数停在无法再加一的位置，此后一次也报不上去，连重置都会被
+    // 立刻顶回来。中继给出的这种既有序号只会来自异常，因此记一笔异常而不采信。
+    const env = await fixture();
+    const key = DeviceKey.generate();
+    const existing = peerRecord({
+      key,
+      contentKey: await contentKeyOf(env.files),
+      channelId: "aa".repeat(16),
+      sequence: 2 ** 53 - 1,
+      collectedAt: "2023-11-14T22:15:23Z",
+      payload: statusContent("示例设备乙", []),
+    });
+    env.relay.reply = () => ({
+      status: 200,
+      body: { accepted: false, own: recordDTO(existing), records: [], revocations: [] },
+    });
+
+    await env.engine.tick("timer");
+    await env.engine.tick("timer");
+
+    // 本机计数不动，因此两次上报用的是同一个序号，重置之后也仍能继续。
+    expect(env.snapshot().sequence).toBe(0);
+    expect(env.relay.requests.filter((request) => request.path === "/v1/report").map((request) => request.body["sequence"])).toEqual([1, 1]);
+    expect(env.snapshot().diagnostics.events.some((event) => event.includes("不予采信"))).toBe(true);
+  });
+
   it("中继截断或舍弃记录时如实写出", async () => {
     const env = await fixture();
     const peer = DeviceKey.generate();

@@ -580,7 +580,15 @@ export class Engine {
       if (reply.accepted) {
         accepted = true;
       } else if (reply.own !== null && reply.own.sequence >= sequence) {
-        highestOwn = Math.max(highestOwn ?? 0, reply.own.sequence);
+        if (nextSequence(reply.own.sequence) > MAX_SEQUENCE) {
+          // 采信它会把本机计数顶到无法再加一的位置，此后一次也报不上去，连重置都会
+          // 被立刻顶回来。这样的既有序号只会来自异常的中继，记一笔异常而不采信。
+          this.note(
+            `中继 ${client.name} 给出的本设备既有序号已达可表示上界，不予采信：请在诊断栏核对状态`,
+          );
+        } else {
+          highestOwn = Math.max(highestOwn ?? 0, reply.own.sequence);
+        }
       }
 
       this.mergeRecords(client.name, channelId, reply.records);
