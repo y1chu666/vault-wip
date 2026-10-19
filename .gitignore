@@ -1,0 +1,13 @@
+# 依赖与构建产物
+node_modules/
+main.js
+*.js.map
+
+# 本地发布包
+*.zip
+
+# 编辑器与系统文件
+.DS_Store
+.idea/
+.vscode/
+*.swp
