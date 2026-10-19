@@ -205,6 +205,19 @@ describe("collectStatus", () => {
     return args.slice(index).join(" ");
   }
 
+  /**
+   * 从一次执行带回的环境变量里，取出被压掉的配置项。
+   *
+   * 压过滤器不走 `-c`（键里可能含等号，会被拆错），而是走 `GIT_CONFIG_*` 这一组。
+   */
+  function overridePairs(env: Readonly<Record<string, string>> | undefined): Map<string, string> {
+    const pairs = new Map<string, string>();
+    for (let index = 0; index < Number(env?.["GIT_CONFIG_COUNT"] ?? 0); index += 1) {
+      pairs.set(env?.[`GIT_CONFIG_KEY_${index}`] ?? "", env?.[`GIT_CONFIG_VALUE_${index}`] ?? "");
+    }
+    return pairs;
+  }
+
   /** 按调用参数返回预先准备的输出。 */
   function stubRunner(overrides: Record<string, CommandResult> = {}): CommandRunner {
     const defaults: Record<string, CommandResult> = {
@@ -278,28 +291,53 @@ describe("collectStatus", () => {
   it("仓库定义的过滤器逐个压掉", async () => {
     // 属性文件随仓库流转，驱动名由仓库自定，因此这里不能靠列举固定名字：
     // 先把仓库里定义过的驱动取出来，随后每条命令都把它们清空。
-    const seen: string[][] = [];
-    const runner: CommandRunner = (args) => {
-      seen.push([...args]);
+    const envs: Readonly<Record<string, string>>[] = [];
+    const runner: CommandRunner = (args, _cwd, env) => {
       const command = withoutConfigArgs(args);
       if (command.startsWith("config ")) {
         return Promise.resolve(
           result(Buffer.from("filter.evil.clean\nfilter.evil.x.process\nfilter.evil.required\n", "utf8")),
         );
       }
-      return Promise.resolve(result(nulJoin(["# branch.head main"])));
+      envs.push(env ?? {});
+      // 有改动时才会多跑两次差异命令，这里给一份带改动的状态，好把每条命令都看到。
+      return Promise.resolve(
+        command.startsWith("status ") ? result(statusFixture) : result(Buffer.alloc(0)),
+      );
     };
 
     const collected = await collectStatus(runner, "/repo");
 
     expect(collected.branch).toBe("main");
-    const status = seen.find((args) => withoutConfigArgs(args).startsWith("status ")) ?? [];
-    expect(status).toContain("filter.evil.clean=");
-    expect(status).toContain("filter.evil.process=");
-    expect(status).toContain("filter.evil.smudge=");
-    expect(status).toContain("filter.evil.required=false");
+    const pairs = overridePairs(envs[0]);
+    expect(pairs.get("filter.evil.clean")).toBe("");
+    expect(pairs.get("filter.evil.process")).toBe("");
+    expect(pairs.get("filter.evil.smudge")).toBe("");
+    expect(pairs.get("filter.evil.required")).toBe("false");
     // 驱动名里的点属于驱动名的一部分，不能当成层级分隔。
-    expect(status).toContain("filter.evil.x.clean=");
+    expect(pairs.has("filter.evil.x.clean")).toBe(true);
+    // 每条命令都要带上：漏掉哪一条，那条命令就可能跑起仓库指定的程序。
+    expect(envs.length).toBeGreaterThan(1);
+    expect(envs.every((env) => env["GIT_CONFIG_COUNT"] === envs[0]?.["GIT_CONFIG_COUNT"])).toBe(true);
+  });
+
+  it("驱动名含等号时同样压得住", async () => {
+    // `-c` 按第一个等号拆「键=值」，驱动名含等号时会被拆错，压的其实是另一个键。
+    const envs: Readonly<Record<string, string>>[] = [];
+    const runner: CommandRunner = (args, _cwd, env) => {
+      const command = withoutConfigArgs(args);
+      if (command.startsWith("config ")) {
+        return Promise.resolve(result(Buffer.from("filter.a=b.clean\nfilter.a=b.process\n", "utf8")));
+      }
+      envs.push(env ?? {});
+      return Promise.resolve(result(nulJoin(["# branch.head main"])));
+    };
+
+    await collectStatus(runner, "/repo");
+
+    const pairs = overridePairs(envs[0]);
+    expect(pairs.get("filter.a=b.clean")).toBe("");
+    expect(pairs.get("filter.a=b.process")).toBe("");
   });
 
   it("把处于合并冲突的文件单列", async () => {
@@ -494,6 +532,45 @@ describe("真实仓库上的采集", () => {
       await writeFile(included, `[filter "evil"]\n\tclean = ${hook}\n\tprocess = ${hook}\n`);
       await appendFile(join(root, ".git", "config"), `\n[include]\n\tpath = ${included}\n`);
       await writeFile(join(root, ".gitattributes"), "*.md filter=evil\n");
+      await writeFile(join(root, "a.md"), "alpha\nBETA\n");
+
+      await rawGit(root);
+      expect(await readFile(marker)).toBeTruthy();
+      await rm(marker);
+
+      await collectStatus(git, root);
+
+      await expect(readFile(marker)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("只读查询不执行名字里带等号的过滤器", async () => {
+    if (!available) {
+      return;
+    }
+
+    // 驱动名里可以有等号（`[filter "a=b"]`）。若是拼成 `-c filter.a=b.clean=`，git 按
+    // 第一个等号拆键值，压住的是另一个键，真正要压的驱动照旧被执行。
+    const root = await mkdtemp(join(tmpdir(), "waystation-filter-equals-"));
+    try {
+      const marker = join(root, "marker.txt");
+      const hook = join(root, "hook.sh");
+      await git(["init", "-q", "."], root);
+      await writeFile(join(root, "a.md"), "alpha\nbeta\n");
+      await git(["add", "-A"], root);
+      await git(
+        ["-c", "user.email=dev@example.invalid", "-c", "user.name=device-a", "commit", "-q", "-m", "初始化"],
+        root,
+      );
+
+      await writeFile(hook, `#!/bin/sh\necho 执行了 >> "${marker}"\ncat\n`, { mode: 0o755 });
+      await appendFile(
+        join(root, ".git", "config"),
+        `\n[filter "a=b"]\n\tclean = ${hook}\n\tprocess = ${hook}\n`,
+      );
+      await writeFile(join(root, ".gitattributes"), "*.md filter=a=b\n");
       await writeFile(join(root, "a.md"), "alpha\nBETA\n");
 
       await rawGit(root);

@@ -18,8 +18,17 @@ export interface CommandResult {
   readonly stderr: string;
 }
 
-/** 执行命令的方式。留成参数是为了让用例不必真的调用 git。 */
-export type CommandRunner = (args: readonly string[], cwd: string) => Promise<CommandResult>;
+/**
+ * 执行命令的方式。留成参数是为了让用例不必真的调用 git。
+ *
+ * `env` 是这一次执行额外带上的环境变量：仓库定义的过滤器要靠它压掉，缘由见
+ * `filterOverrideEnv`。
+ */
+export type CommandRunner = (
+  args: readonly string[],
+  cwd: string,
+  env?: Readonly<Record<string, string>>,
+) => Promise<CommandResult>;
 
 /** 采集失败。消息面向使用者。 */
 export class CollectError extends Error {
@@ -130,27 +139,39 @@ function driverNameOf(key: string): string | null {
 }
 
 /**
- * 把仓库自己定义的过滤器逐个清空。
+ * 把仓库自己定义的过滤器逐个清空，做成随命令带过去的一组环境变量。
  *
- * 清空取值而不改仓库文件：命令行取值的优先级高于仓库配置，因此仓库里怎么写都不会
- * 被调用；同时把驱动标为非必需，免得压掉取值之后 git 因「驱动不见了」直接报错。
+ * 清空取值而不改仓库文件：命令行一带上就压过仓库里的写法。这里不走 `-c`，因为
+ * `-c` 按第一个等号拆「键=值」，而驱动名本身可以含等号（`[filter "a=b"]`），那样
+ * 拼出来的键会被拆错，真正要压的驱动反而压不住。`GIT_CONFIG_*` 这组环境变量把键
+ * 整条给出，含等号也对得上。顺带把驱动标为非必需，免得压掉取值之后 git 因
+ * 「驱动不见了」直接报错。
  */
-async function filterOverrideArgs(runner: CommandRunner, cwd: string): Promise<string[]> {
-  const args: string[] = [];
+async function filterOverrideEnv(runner: CommandRunner, cwd: string): Promise<Record<string, string>> {
+  const entries: [string, string][] = [];
   for (const name of await localFilterDrivers(runner, cwd)) {
     for (const slot of ["clean", "process", "smudge"]) {
-      args.push("-c", `filter.${name}.${slot}=`);
+      entries.push([`filter.${name}.${slot}`, ""]);
     }
-    args.push("-c", `filter.${name}.required=false`);
+    entries.push([`filter.${name}.required`, "false"]);
   }
-  return args;
+  if (entries.length === 0) {
+    return {};
+  }
+
+  const env: Record<string, string> = { GIT_CONFIG_COUNT: String(entries.length) };
+  entries.forEach(([key, value], index) => {
+    env[`GIT_CONFIG_KEY_${index}`] = key;
+    env[`GIT_CONFIG_VALUE_${index}`] = value;
+  });
+  return env;
 }
 
 /** 默认的命令执行方式：不经外壳，直接调用可执行文件。 */
 export function createCommandRunner(gitPath: string, timeoutMs = COLLECT_TIMEOUT_MS): CommandRunner {
   const executable = gitPath === "" ? "git" : gitPath;
 
-  return (args, cwd) =>
+  return (args, cwd, env) =>
     new Promise((resolve, reject) => {
       execFile(
         executable,
@@ -168,6 +189,7 @@ export function createCommandRunner(gitPath: string, timeoutMs = COLLECT_TIMEOUT
             LC_ALL: "C",
             GIT_OPTIONAL_LOCKS: "0",
             GIT_TERMINAL_PROMPT: "0",
+            ...env,
           },
         },
         (error, stdout, stderr) => {
@@ -213,10 +235,10 @@ export async function gitVersion(runner: CommandRunner, cwd: string): Promise<st
  * 假冲突的判定只用于措辞：它依赖带行尾过滤的差异输出，因此仅在确实存在改动时才多跑两次 git。
  */
 export async function collectStatus(runner: CommandRunner, cwd: string): Promise<CollectedStatus> {
-  // 仓库自己定义的过滤器先取一次，随后每条命令都据此把它们压掉。
-  const safe = [...SAFE_CONFIG_ARGS, ...(await filterOverrideArgs(runner, cwd))];
+  // 仓库自己定义的过滤器先取一次，随后每条命令都带着压掉它们的取值。
+  const filterEnv = await filterOverrideEnv(runner, cwd);
 
-  const statusResult = await runner([...safe, "status", "--porcelain=v2", "-z", "--branch"], cwd);
+  const statusResult = await runner(["status", "--porcelain=v2", "-z", "--branch"], cwd, filterEnv);
   if (statusResult.code !== 0) {
     throw new CollectError(t("读取仓库状态失败：{detail}", { detail: firstLine(statusResult.stderr) }));
   }
@@ -230,7 +252,7 @@ export async function collectStatus(runner: CommandRunner, cwd: string): Promise
 
   let suspectFiles: string[] = [];
   if (changes.length > 0) {
-    suspectFiles = await detectFalseConflicts(runner, cwd, changes, safe);
+    suspectFiles = await detectFalseConflicts(runner, cwd, changes, filterEnv);
   }
 
   return {
@@ -254,10 +276,10 @@ async function detectFalseConflicts(
   runner: CommandRunner,
   cwd: string,
   changes: readonly Change[],
-  safe: readonly string[],
+  filterEnv: Readonly<Record<string, string>>,
 ): Promise<string[]> {
-  const unstaged = parseRawDiff((await runDiff(runner, cwd, false, safe)).stdout);
-  const staged = parseRawDiff((await runDiff(runner, cwd, true, safe)).stdout);
+  const unstaged = parseRawDiff((await runDiff(runner, cwd, false, filterEnv)).stdout);
+  const staged = parseRawDiff((await runDiff(runner, cwd, true, filterEnv)).stdout);
   const differed = new Set<string>([...unstaged, ...staged].map((entry) => normalizePath(entry.path)));
 
   const suspects = new Set<string>();
@@ -279,15 +301,15 @@ function runDiff(
   runner: CommandRunner,
   cwd: string,
   staged: boolean,
-  safe: readonly string[],
+  filterEnv: Readonly<Record<string, string>>,
 ): Promise<CommandResult> {
   // --no-ext-diff 显式关掉外部差异程序：raw 格式本就用不到它，写在这里是为了
   // 即便日后改动了参数，也不会顺手把仓库配置里的程序带上。
-  const args = [...safe, "diff", "--raw", "-z", "--ignore-cr-at-eol", "--no-ext-diff"];
+  const args = ["diff", "--raw", "-z", "--ignore-cr-at-eol", "--no-ext-diff"];
   if (staged) {
     args.push("--cached");
   }
-  return runner(args, cwd);
+  return runner(args, cwd, filterEnv);
 }
 
 /** 同一个文件的两侧内容一致而权限位不同，即为仅权限差异。 */
