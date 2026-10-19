@@ -3,7 +3,7 @@
   "name": "Vault Waystation",
   "version": "0.1.0",
   "minAppVersion": "1.8.7",
-  "description": "Warns you before you start editing that another device still has uncommitted changes.",
+  "description": "Warns you before you start editing that another device still has uncommitted changes in the same vault.",
   "author": "y1chu",
   "isDesktopOnly": true
 }
