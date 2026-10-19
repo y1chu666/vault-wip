@@ -1,0 +1,90 @@
+# 发布：标签推送时构建插件，校验版本一致，并把产物挂到 Release 上。
+#
+# 发布以标签为准：清单、包描述与版本映射三处必须与标签一致，否则宁可失败也不发出
+# 版本错乱的产物。带连字符的标签（如 v0.2.0-rc.1）自动标记为预发布。
+name: 发布
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已存在的标签
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 取出源码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: 校验版本一致
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [ -n "${{ inputs.tag }}" ]; then tag="${{ inputs.tag }}"; fi
+          version="${tag#v}"
+          manifest="$(node -p 'require("./manifest.json").version')"
+          package="$(node -p 'require("./package.json").version')"
+          if [ "$version" != "$manifest" ] || [ "$version" != "$package" ]; then
+            echo "标签为 $tag，清单为 $manifest，包描述为 $package，三处必须一致。"
+            exit 1
+          fi
+          if ! node -e "process.exit(require('./versions.json')['$version'] ? 0 : 1)"; then
+            echo "versions.json 中缺少 $version 的 Obsidian 最低版本映射。"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+      - name: 安装依赖
+        run: npm ci
+      - name: 测试
+        run: npm test
+      - name: 构建
+        run: npm run build
+      - name: 打包
+        run: |
+          zip -q "vault-wip-${VERSION}.zip" main.js manifest.json styles.css
+          sha256sum main.js manifest.json styles.css "vault-wip-${VERSION}.zip" > SHA256SUMS.txt
+      - name: 标记预发布
+        run: |
+          if [[ "$TAG" == *-* ]]; then echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV"; else echo "PRERELEASE=" >> "$GITHUB_ENV"; fi
+      - name: 创建 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Vault WIP ${VERSION}。插件需配合中继服务端 [WIP Relay](https://github.com/y1chu666/wip-relay) 使用。资产中的三个文件放入 \`.obsidian/plugins/vault-wip/\`；压缩包为同样内容的便利版本。" \
+            $PRERELEASE
+      - name: 上传资产
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" main.js manifest.json styles.css \
+            "vault-wip-${VERSION}.zip" SHA256SUMS.txt --clobber
+      - name: 回拉校验
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p verify
+          gh release download "$TAG" --dir verify
+          cd verify
+          sha256sum -c SHA256SUMS.txt
