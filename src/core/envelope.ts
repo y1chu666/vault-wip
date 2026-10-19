@@ -13,9 +13,9 @@ export const CLOCK_SKEW_SECONDS = 60;
 /** 一次性随机值的字节数。 */
 export const NONCE_BYTES = 32;
 
-const REQUEST_CONTEXT = "waystation-request-v1";
-const RESPONSE_CONTEXT = "waystation-response-v1";
-const RECORD_CONTEXT = "waystation-record-v1";
+const REQUEST_CONTEXT = "wip-relay-request-v1";
+const RESPONSE_CONTEXT = "wip-relay-response-v1";
+const RECORD_CONTEXT = "wip-relay-record-v1";
 
 /** 请求中参与签名的要素。 */
 export interface RequestElements {

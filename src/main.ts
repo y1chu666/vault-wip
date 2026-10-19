@@ -175,7 +175,7 @@ export default class VaultWaystationPlugin extends Plugin {
       },
       isFocused: () => document.hasFocus(),
       log: (message) => {
-        console.debug(`[vault-waystation] ${message}`);
+        console.debug(`[vault-wip] ${message}`);
       },
     });
 

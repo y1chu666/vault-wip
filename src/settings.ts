@@ -386,7 +386,7 @@ export class WaystationSettingTab extends PluginSettingTab {
     void writeTextFile(path, serializeConfig(config))
       .then(() => loadAndApply(this.plugin))
       .catch((error: unknown) => {
-        console.error("[vault-waystation] 配置写入失败", error);
+        console.error("[vault-wip] 配置写入失败", error);
       });
   }
 }
@@ -404,7 +404,7 @@ async function loadAndApply(plugin: VaultWaystationPlugin): Promise<void> {
   try {
     plugin.applyConfig(parseConfig(text));
   } catch (error) {
-    console.error("[vault-waystation] 配置不合规", error);
+    console.error("[vault-wip] 配置不合规", error);
   }
 }
 

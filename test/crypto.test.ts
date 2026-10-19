@@ -40,7 +40,7 @@ describe("密钥串", () => {
     const key = contentKeyFromBytes(bytes);
     const text = encodeContentKey(key);
 
-    expect(text.startsWith("waystation-key-v1:")).toBe(true);
+    expect(text.startsWith("wip-relay-key-v1:")).toBe(true);
     expect(decodeContentKey(text).id).toBe(key.id);
     expect(decodeContentKey(text).bytes).toEqual(key.bytes);
   });
@@ -56,13 +56,13 @@ describe("密钥串", () => {
   });
 
   it("拒绝含不合规字符的密钥串", () => {
-    expect(() => decodeContentKey(`waystation-key-v1:${Buffer.from(bytes).toString("base64url")}!!`)).toThrow(
+    expect(() => decodeContentKey(`wip-relay-key-v1:${Buffer.from(bytes).toString("base64url")}!!`)).toThrow(
       /不合规的字符/,
     );
   });
 
   it("拒绝长度不对的密钥串", () => {
-    const short = `waystation-key-v1:${Buffer.alloc(16).toString("base64url")}`;
+    const short = `wip-relay-key-v1:${Buffer.alloc(16).toString("base64url")}`;
 
     expect(() => decodeContentKey(short)).toThrow(/期望 32 字节/);
   });
@@ -125,7 +125,7 @@ describe("口令封装的密钥", () => {
 
     const text = protectContentKey(key, passphrase);
 
-    expect(text.startsWith("waystation-protected-key-v1:")).toBe(true);
+    expect(text.startsWith("wip-relay-protected-key-v1:")).toBe(true);
     expect(unprotectContentKey(text, passphrase).bytes).toEqual(key.bytes);
   });
 
@@ -143,10 +143,10 @@ describe("口令封装的密钥", () => {
 
   it("文本被改动时解不开", () => {
     const text = protectContentKey(generateContentKey(), passphrase);
-    const body = Buffer.from(text.slice("waystation-protected-key-v1:".length), "base64url");
+    const body = Buffer.from(text.slice("wip-relay-protected-key-v1:".length), "base64url");
     body[body.length - 1] = (body[body.length - 1] ?? 0) ^ 0xff;
 
-    expect(() => unprotectContentKey(`waystation-protected-key-v1:${body.toString("base64url")}`, passphrase)).toThrow(
+    expect(() => unprotectContentKey(`wip-relay-protected-key-v1:${body.toString("base64url")}`, passphrase)).toThrow(
       /口令不对|已被改动/,
     );
   });
@@ -154,7 +154,7 @@ describe("口令封装的密钥", () => {
   it("拒绝空口令与过长口令", () => {
     expect(() => protectContentKey(generateContentKey(), "")).toThrow(/不能为空/);
     expect(() => protectContentKey(generateContentKey(), "a".repeat(1025))).toThrow(/最长 1024/);
-    expect(() => unprotectContentKey("waystation-protected-key-v1:AAAA", "")).toThrow(/不能为空/);
+    expect(() => unprotectContentKey("wip-relay-protected-key-v1:AAAA", "")).toThrow(/不能为空/);
   });
 
   it("拒绝不是本插件导出的文本", () => {
@@ -162,26 +162,26 @@ describe("口令封装的密钥", () => {
   });
 
   it("拒绝过短的文本", () => {
-    expect(() => unprotectContentKey("waystation-protected-key-v1:AAAA", passphrase)).toThrow(/过短/);
+    expect(() => unprotectContentKey("wip-relay-protected-key-v1:AAAA", passphrase)).toThrow(/过短/);
   });
 
   it("拒绝版本不同的文本", () => {
     const text = protectContentKey(generateContentKey(), passphrase);
-    const body = Buffer.from(text.slice("waystation-protected-key-v1:".length), "base64url");
+    const body = Buffer.from(text.slice("wip-relay-protected-key-v1:".length), "base64url");
     body[0] = 9;
 
     expect(() =>
-      unprotectContentKey(`waystation-protected-key-v1:${body.toString("base64url")}`, passphrase),
+      unprotectContentKey(`wip-relay-protected-key-v1:${body.toString("base64url")}`, passphrase),
     ).toThrow(/只认识 1/);
   });
 
   it("拒绝代价参数超出范围的文本", () => {
     const text = protectContentKey(generateContentKey(), passphrase);
-    const body = Buffer.from(text.slice("waystation-protected-key-v1:".length), "base64url");
+    const body = Buffer.from(text.slice("wip-relay-protected-key-v1:".length), "base64url");
     body[1] = 30;
 
     expect(() =>
-      unprotectContentKey(`waystation-protected-key-v1:${body.toString("base64url")}`, passphrase),
+      unprotectContentKey(`wip-relay-protected-key-v1:${body.toString("base64url")}`, passphrase),
     ).toThrow(/超出允许范围/);
   });
 });

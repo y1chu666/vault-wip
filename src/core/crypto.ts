@@ -29,10 +29,10 @@ const TAG_BYTES = 16;
 const ENVELOPE_VERSION = 1;
 
 /** 密钥串的前缀，使一枚密钥一眼可辨，避免与其他文本混淆。 */
-const KEY_STRING_PREFIX = "waystation-key-v1:";
+const KEY_STRING_PREFIX = "wip-relay-key-v1:";
 
 /** 口令封装的前缀。与被封装的密钥串分开，两者一眼可辨。 */
-const PROTECTED_PREFIX = "waystation-protected-key-v1:";
+const PROTECTED_PREFIX = "wip-relay-protected-key-v1:";
 
 /** 口令封装的格式版本。 */
 const PROTECTED_VERSION = 1;

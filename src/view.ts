@@ -11,7 +11,7 @@ import { refName, remoteSummary } from "./core/remote.js";
 import type { StatusPayload } from "./core/payload.js";
 import type VaultWaystationPlugin from "./main.js";
 
-export const VIEW_TYPE = "vault-waystation-view";
+export const VIEW_TYPE = "vault-wip-view";
 
 type TabName = "overview" | "peers" | "relays" | "security" | "diagnostics";
 
@@ -62,7 +62,7 @@ export class WaystationView extends ItemView {
   }
 
   override getDisplayText(): string {
-    return "Vault Waystation";
+    return "Vault WIP";
   }
 
   override getIcon(): string {
@@ -71,14 +71,14 @@ export class WaystationView extends ItemView {
 
   override onOpen(): Promise<void> {
     this.contentEl.empty();
-    const root = this.contentEl.createDiv({ cls: "waystation-view" });
+    const root = this.contentEl.createDiv({ cls: "vault-wip-view" });
 
-    const tabs = root.createDiv({ cls: "waystation-tabs" });
+    const tabs = root.createDiv({ cls: "vault-wip-tabs" });
     tabs.style.display = "flex";
     tabs.style.gap = "0.5em";
     tabs.style.marginBottom = "0.75em";
 
-    const body = root.createDiv({ cls: "waystation-body" });
+    const body = root.createDiv({ cls: "vault-wip-body" });
     for (const name of TABS) {
       const button = tabs.createEl("button", { text: tabLabel(name) });
       button.onclick = () => {
@@ -87,7 +87,7 @@ export class WaystationView extends ItemView {
         this.render();
       };
       this.tabButtons.set(name, button);
-      this.panes.set(name, body.createDiv({ cls: `waystation-pane waystation-${name}` }));
+      this.panes.set(name, body.createDiv({ cls: `vault-wip-pane vault-wip-${name}` }));
     }
 
     this.updateTabs();
@@ -130,7 +130,7 @@ export class WaystationView extends ItemView {
   /** 把某一栏的内容填上。 */
   private fill(pane: HTMLElement, snapshot: EngineSnapshot | null, error: string | null): void {
     if (error !== null) {
-      const warn = pane.createDiv({ cls: "waystation-error" });
+      const warn = pane.createDiv({ cls: "vault-wip-error" });
       warn.setText(t("配置有误：{error}", { error }));
       const path = this.plugin.configPath();
       if (path !== null) {
@@ -203,7 +203,7 @@ export class WaystationView extends ItemView {
     ]);
     pane.createDiv({ text: remoteSummary(remote) });
 
-    const actions = pane.createDiv({ cls: "waystation-actions" });
+    const actions = pane.createDiv({ cls: "vault-wip-actions" });
     const button = actions.createEl("button", { text: t("立即采集并上报") });
     button.onclick = () => {
       void this.plugin.reportNow();
@@ -244,7 +244,7 @@ export class WaystationView extends ItemView {
       return;
     }
     if (snapshot.degraded) {
-      const warn = pane.createDiv({ cls: "waystation-warning" });
+      const warn = pane.createDiv({ cls: "vault-wip-warning" });
       warn.setText(t("有中继处于降级传输：通信不加密或可被冒充，此时不允许注册、吊销与退役。"));
     }
 
@@ -268,7 +268,7 @@ export class WaystationView extends ItemView {
         "序号由本设备自己推进，平时不必过问。只有在它已经无法继续推进时（例如上一条记录越过了可表示范围），才需要在这里重置；重置只改本机计数，中继上的数据一条不动。",
       ),
     });
-    const countRow = pane.createDiv({ cls: "waystation-actions" });
+    const countRow = pane.createDiv({ cls: "vault-wip-actions" });
     const resetButton = countRow.createEl("button", { text: t("重置本机计数") });
     resetButton.onclick = () => {
       if (!this.confirmResetSequence) {
@@ -334,7 +334,7 @@ export class WaystationView extends ItemView {
     });
 
     heading(pane, t("本机密钥串"));
-    const stringActions = pane.createDiv({ cls: "waystation-actions" });
+    const stringActions = pane.createDiv({ cls: "vault-wip-actions" });
     const copyString = stringActions.createEl("button", { text: t("复制密钥串") });
     copyString.onclick = () => {
       const text = this.plugin.contentKeyText();
@@ -360,7 +360,7 @@ export class WaystationView extends ItemView {
         "口令封装的文件仍需要口令才能解开，可以走不那么可信的渠道；口令往往比随机密钥串弱，因此这种方式排在密钥串之后。",
       ),
     });
-    const passphraseRow = pane.createDiv({ cls: "waystation-actions" });
+    const passphraseRow = pane.createDiv({ cls: "vault-wip-actions" });
     const passphrase = passphraseRow.createEl("input", { type: "password" });
     passphrase.placeholder = t("口令");
     const copyProtected = passphraseRow.createEl("button", { text: t("复制封装的密钥") });
@@ -384,8 +384,8 @@ export class WaystationView extends ItemView {
 
     heading(pane, t("导入密钥"));
     pane.createDiv({ text: t("把另一台设备给出的密钥串或口令封装文本粘贴进来；口令留空表示文本是密钥串本身。") });
-    const importRow = pane.createDiv({ cls: "waystation-actions" });
-    const importText = importRow.createEl("textarea", { cls: "waystation-textarea" });
+    const importRow = pane.createDiv({ cls: "vault-wip-actions" });
+    const importText = importRow.createEl("textarea", { cls: "vault-wip-textarea" });
     importText.placeholder = t("密钥串或口令封装文本");
     const importPassphrase = importRow.createEl("input", { type: "password" });
     importPassphrase.placeholder = t("口令（可留空）");
@@ -397,7 +397,7 @@ export class WaystationView extends ItemView {
     };
 
     heading(pane, t("本设备"));
-    const retireRow = pane.createDiv({ cls: "waystation-actions" });
+    const retireRow = pane.createDiv({ cls: "vault-wip-actions" });
     const retireButton = retireRow.createEl("button", { text: t("退役本设备") });
     retireButton.style.color = "var(--text-error)";
     retireButton.onclick = () => {
@@ -414,7 +414,7 @@ export class WaystationView extends ItemView {
       text: t("退役会删除各中继上本设备的数据，并把本设备记入吊销名单；此后需要重新向中继注册才能继续使用。"),
     });
 
-    this.securityDynamic = pane.createDiv({ cls: "waystation-security-status" });
+    this.securityDynamic = pane.createDiv({ cls: "vault-wip-security-status" });
     this.securityBuilt = true;
   }
 
@@ -468,7 +468,7 @@ function heading(parent: HTMLElement, text: string): HTMLElement {
 
 /** 一张两列的小表。 */
 function table(parent: HTMLElement, rows: readonly (readonly [string, string])[]): void {
-  const list = parent.createEl("table", { cls: "waystation-table" });
+  const list = parent.createEl("table", { cls: "vault-wip-table" });
   for (const [name, value] of rows) {
     const row = list.createEl("tr");
     row.createEl("td", { text: name }).style.paddingRight = "0.75em";
@@ -515,7 +515,7 @@ function conflictLine(parent: HTMLElement, conflict: Conflict): void {
 
 /** 一台对端的状态。 */
 function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerprint: string) => void): void {
-  const block = parent.createDiv({ cls: "waystation-peer" });
+  const block = parent.createDiv({ cls: "vault-wip-peer" });
   heading(block, displayName(peer));
   table(block, [
     [t("指纹"), peer.fingerprint],
@@ -525,7 +525,7 @@ function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerpri
   ]);
   pathList(block, peer.payload.paths);
   suspectNotes(block, peer.payload);
-  const actions = block.createDiv({ cls: "waystation-actions" });
+  const actions = block.createDiv({ cls: "vault-wip-actions" });
   const button = actions.createEl("button", { text: t("吊销这台设备") });
   button.onclick = () => {
     onRevoke(peer.fingerprint);
@@ -534,7 +534,7 @@ function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerpri
 
 /** 一台中继的现状。 */
 function relayBlock(parent: HTMLElement, relay: RelayStatus): void {
-  const block = parent.createDiv({ cls: "waystation-relay" });
+  const block = parent.createDiv({ cls: "vault-wip-relay" });
   heading(block, relay.name);
   table(block, [
     [t("地址"), relay.url],
@@ -544,7 +544,7 @@ function relayBlock(parent: HTMLElement, relay: RelayStatus): void {
     [t("最近一次失败"), relay.lastFailure ?? t("无")],
   ]);
   if (relay.degraded) {
-    const warn = block.createDiv({ cls: "waystation-warning" });
+    const warn = block.createDiv({ cls: "vault-wip-warning" });
     warn.setText(t("这一级属于降级传输：注册、吊销与退役在此不可用。"));
   }
 }
@@ -585,7 +585,7 @@ async function copyToClipboard(text: string, message: string): Promise<void> {
 
 /** 在界面上留一句短提示。 */
 function flash(parent: HTMLElement, text: string): void {
-  const element = parent.createDiv({ cls: "waystation-flash", text });
+  const element = parent.createDiv({ cls: "vault-wip-flash", text });
   window.setTimeout(() => {
     element.remove();
   }, 6000);

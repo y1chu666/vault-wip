@@ -89,9 +89,9 @@ export async function startFakeRelay(secured: boolean): Promise<FakeRelay> {
       const signatureText = requestSigningText({
         method: "POST",
         path,
-        fingerprint: String(headers["x-waystation-fingerprint"] ?? ""),
-        timestampSeconds: Number(headers["x-waystation-timestamp"] ?? 0),
-        nonce: String(headers["x-waystation-nonce"] ?? ""),
+        fingerprint: String(headers["x-wip-relay-fingerprint"] ?? ""),
+        timestampSeconds: Number(headers["x-wip-relay-timestamp"] ?? 0),
+        nonce: String(headers["x-wip-relay-nonce"] ?? ""),
         body: new Uint8Array(raw),
       });
 
@@ -99,13 +99,13 @@ export async function startFakeRelay(secured: boolean): Promise<FakeRelay> {
         path,
         body,
         headers,
-        fingerprint: String(headers["x-waystation-fingerprint"] ?? ""),
+        fingerprint: String(headers["x-wip-relay-fingerprint"] ?? ""),
         signatureValid:
           publicKey !== null &&
           verifySignature(
             publicKey,
             encodeText(signatureText),
-            new Uint8Array(Buffer.from(String(headers["x-waystation-signature"] ?? ""), "hex")),
+            new Uint8Array(Buffer.from(String(headers["x-wip-relay-signature"] ?? ""), "hex")),
           ),
       };
       requests.push(record);
@@ -123,9 +123,9 @@ export async function startFakeRelay(secured: boolean): Promise<FakeRelay> {
 
       const responseHeaders: Record<string, string> = { "content-type": "application/json" };
       if (decided.unsigned !== true) {
-        responseHeaders["x-waystation-fingerprint"] = signed.fingerprint;
-        responseHeaders["x-waystation-public-key"] = Buffer.from(signed.publicKey).toString("base64");
-        responseHeaders["x-waystation-signature"] = Buffer.from(signature).toString("hex");
+        responseHeaders["x-wip-relay-fingerprint"] = signed.fingerprint;
+        responseHeaders["x-wip-relay-public-key"] = Buffer.from(signed.publicKey).toString("base64");
+        responseHeaders["x-wip-relay-signature"] = Buffer.from(signature).toString("hex");
       }
       response.writeHead(decided.status, responseHeaders);
       response.end(sentBody);

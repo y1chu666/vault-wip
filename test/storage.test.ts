@@ -28,7 +28,7 @@ const directories: string[] = [];
 
 /** 建一个临时插件目录。 */
 async function temporaryFiles(): Promise<PluginFiles> {
-  const base = await mkdtemp(join(tmpdir(), "waystation-"));
+  const base = await mkdtemp(join(tmpdir(), "vault-wip-"));
   directories.push(base);
   return pluginFiles(base);
 }

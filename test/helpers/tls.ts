@@ -25,7 +25,7 @@ export function selfSignedCertificate(): SelfSignedCertificate {
     return cached;
   }
 
-  const directory = mkdtempSync(join(tmpdir(), "waystation-tls-"));
+  const directory = mkdtempSync(join(tmpdir(), "vault-wip-tls-"));
   const keyPath = join(directory, "relay.key");
   const certPath = join(directory, "relay.crt");
   execFileSync(

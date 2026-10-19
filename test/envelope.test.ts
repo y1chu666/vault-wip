@@ -37,7 +37,7 @@ describe("requestSigningText", () => {
     });
 
     expect(text.split("\n")).toEqual([
-      "waystation-request-v1",
+      "wip-relay-request-v1",
       "POST",
       "/v1/report",
       key.fingerprint,
@@ -82,7 +82,7 @@ describe("responseSigningText", () => {
     const text = responseSigningText({ fingerprint: key.fingerprint, status: 200, body });
 
     expect(text.split("\n")).toEqual([
-      "waystation-response-v1",
+      "wip-relay-response-v1",
       key.fingerprint,
       "200",
       digestHex(body),
@@ -130,7 +130,7 @@ describe("recordSigningText", () => {
     });
 
     expect(text.split("\n")).toEqual([
-      "waystation-record-v1",
+      "wip-relay-record-v1",
       "0f8c1a2b3c4d5e6f708192a3b4c5d6e7",
       key.fingerprint,
       "7",

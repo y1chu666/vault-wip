@@ -1,34 +1,34 @@
 /* 状态视图的少量样式。取值一律用 Obsidian 的主题变量，跟随主题明暗。 */
 
-.waystation-view {
+.vault-wip-view {
   padding: 0.25em 0.5em;
 }
 
-.waystation-view h4 {
+.vault-wip-view h4 {
   margin: 1em 0 0.35em;
 }
 
-.waystation-table td {
+.vault-wip-table td {
   vertical-align: top;
   padding-bottom: 0.15em;
 }
 
-.waystation-warning {
+.vault-wip-warning {
   color: var(--text-warning);
 }
 
-.waystation-error {
+.vault-wip-error {
   color: var(--text-error);
 }
 
-.waystation-peer,
-.waystation-relay {
+.vault-wip-peer,
+.vault-wip-relay {
   border-top: 1px solid var(--background-modifier-border);
   margin-top: 0.6em;
   padding-top: 0.4em;
 }
 
-.waystation-actions {
+.vault-wip-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5em;
@@ -36,12 +36,12 @@
   margin: 0.5em 0;
 }
 
-.waystation-textarea {
+.vault-wip-textarea {
   width: 100%;
   min-height: 3em;
 }
 
-.waystation-flash {
+.vault-wip-flash {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }

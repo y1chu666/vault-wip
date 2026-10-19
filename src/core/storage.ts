@@ -111,7 +111,7 @@ export async function writeTextFile(path: string, text: string, mode?: number): 
  * 那些规则属于他们自己。
  */
 export async function ensureSecretIgnore(path: string, names: readonly string[]): Promise<void> {
-  const existing = (await readTextFile(path)) ?? `${t("# 本目录由 Vault Waystation 使用；以下文件含密钥，不要纳入版本控制。")}\n`;
+  const existing = (await readTextFile(path)) ?? `${t("# 本目录由 Vault WIP 使用；以下文件含密钥，不要纳入版本控制。")}\n`;
   const missing = names.filter((name) => !existing.split(/\r?\n/).includes(name));
   if (missing.length === 0) {
     return;

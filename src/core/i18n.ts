@@ -22,7 +22,7 @@ export type Locale = (typeof LOCALES)[number];
  * 这个名字不翻译：清单里的名字、通知前缀与状态栏前缀都要一致，翻成别的写法只会
  * 让使用者对不上号。放在这里是因为界面与外壳都要用它。
  */
-export const PLUGIN_NAME = "Vault Waystation";
+export const PLUGIN_NAME = "Vault WIP";
 
 /**
  * 英文译文。键是中文原句，占位写成 {名称}。
@@ -299,8 +299,8 @@ export const ENGLISH = {
   "查看 {path} 失败：{reason}": "inspecting {path} failed: {reason}",
   "写入 {path} 失败：{reason}": "writing {path} failed: {reason}",
   "{path} 不是 UTF-8 文本": "{path} is not UTF-8 text",
-  "# 本目录由 Vault Waystation 使用；以下文件含密钥，不要纳入版本控制。":
-    "# This folder is used by Vault Waystation; the files listed below hold keys, so do not put them under version control.",
+  "# 本目录由 Vault WIP 使用；以下文件含密钥，不要纳入版本控制。":
+    "# This folder is used by Vault WIP; the files listed below hold keys, so do not put them under version control.",
   "设备私钥不可用：{reason}": "the device private key is unusable: {reason}",
   "内容密钥不可用：{reason}": "the content key is unusable: {reason}",
   "{path} 不是合法的 JSON，请删掉它重新配对": "{path} is not valid JSON; delete it and pair again",
@@ -456,7 +456,7 @@ export const ENGLISH = {
   "{what}：{reason}": "{what}: {reason}",
 
   // 配置：首次生成的样例文件（整份随语言走）。
-  "Vault Waystation 插件配置。": "Vault Waystation plugin configuration.",
+  "Vault WIP 插件配置。": "Vault WIP plugin configuration.",
   "本文件是取值的唯一来源，视图只是它的编辑器。":
     "This file is the only source of the settings; the interface is merely its editor.",
   "本文件不含任何秘密：设备私钥、内容密钥与钉住的中继公钥另行存放。":

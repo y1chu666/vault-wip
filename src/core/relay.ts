@@ -236,10 +236,10 @@ export class RelayClient {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-waystation-fingerprint": fingerprint,
-          "x-waystation-timestamp": String(timestampSeconds),
-          "x-waystation-nonce": nonce,
-          "x-waystation-signature": Buffer.from(signature).toString("hex"),
+          "x-wip-relay-fingerprint": fingerprint,
+          "x-wip-relay-timestamp": String(timestampSeconds),
+          "x-wip-relay-nonce": nonce,
+          "x-wip-relay-signature": Buffer.from(signature).toString("hex"),
         },
         body: bytes,
         timeoutMs: this.timeoutMs,
@@ -279,9 +279,9 @@ export class RelayClient {
     response: { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly spki: string | null },
     body: Uint8Array,
   ): void {
-    const fingerprint = response.headers["x-waystation-fingerprint"];
-    const publicKeyBase64 = response.headers["x-waystation-public-key"];
-    const signatureHex = response.headers["x-waystation-signature"];
+    const fingerprint = response.headers["x-wip-relay-fingerprint"];
+    const publicKeyBase64 = response.headers["x-wip-relay-public-key"];
+    const signatureHex = response.headers["x-wip-relay-signature"];
     if (fingerprint === undefined || publicKeyBase64 === undefined || signatureHex === undefined) {
       throw new RelayError("transport", t("{relay}：回应没有签名", { relay: this.describe() }));
     }

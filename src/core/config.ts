@@ -241,7 +241,7 @@ export function defaultConfig(alias: string): Config {
  */
 export function templateConfig(alias: string): string {
   const separator = t("、");
-  return `# ${t("Vault Waystation 插件配置。")}
+  return `# ${t("Vault WIP 插件配置。")}
 #
 # ${t("本文件是取值的唯一来源，视图只是它的编辑器。")}
 # ${t("本文件不含任何秘密：设备私钥、内容密钥与钉住的中继公钥另行存放。")}

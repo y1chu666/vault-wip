@@ -98,7 +98,7 @@ async function fixture(options: {
   readonly sequence?: number;
   readonly configure?: (config: Config) => Config;
 } = {}): Promise<Fixture> {
-  const base = temporaryDir("waystation-engine-");
+  const base = temporaryDir("vault-wip-engine-");
   const files = pluginFiles(join(base, "plugin"));
   const vaultRoot = join(base, "vault");
   initRepository(vaultRoot);
@@ -915,7 +915,7 @@ describe("远端查询", () => {
       configure: (config) => ({ ...config, query: { remote: "origin" } }),
     });
     // 拿一个裸仓库当远端，推一次之后两边就指向同一笔提交。
-    const bare = temporaryDir("waystation-remote-");
+    const bare = temporaryDir("vault-wip-remote-");
     execFileSync("git", ["init", "-q", "--bare", "-b", "main", bare], { stdio: "ignore" });
     execFileSync("git", ["remote", "add", "origin", bare], { cwd: env.vaultRoot, stdio: "ignore" });
     execFileSync("git", ["push", "-q", "origin", "main"], { cwd: env.vaultRoot, stdio: "ignore" });
@@ -927,7 +927,7 @@ describe("远端查询", () => {
 
   it("仓库配置里为远端写下的取回程序不会被执行", async () => {
     const env = await pushFromAnotherDevice();
-    const marker = join(temporaryDir("waystation-marker-"), "marker.txt");
+    const marker = join(temporaryDir("vault-wip-marker-"), "marker.txt");
     // 本地传输下，git 会为命名的远端执行配置里写下的取回程序。查询按地址发起，
     // 因此这一项够不到查询这一步；这里把它写进仓库，确认查询没有把它跑起来。
     execFileSync(
@@ -948,7 +948,7 @@ describe("远端查询", () => {
 
   it("远端地址被写成选项时不去执行", async () => {
     const env = await pushFromAnotherDevice();
-    const marker = join(temporaryDir("waystation-marker-"), "marker.txt");
+    const marker = join(temporaryDir("vault-wip-marker-"), "marker.txt");
     // 地址以短横线开头时会被 git 当成选项：`--upload-pack=…` 那一句就会被执行。
     execFileSync("git", ["config", "remote.origin.url", `--upload-pack=sh -c 'touch ${marker}' ://`], {
       cwd: env.vaultRoot,
@@ -985,12 +985,12 @@ async function pushFromAnotherDevice(): Promise<Fixture> {
   const env = await fixture({
     configure: (config) => ({ ...config, query: { remote: "origin" } }),
   });
-  const bare = temporaryDir("waystation-remote-");
+  const bare = temporaryDir("vault-wip-remote-");
   execFileSync("git", ["init", "-q", "--bare", "-b", "main", bare], { stdio: "ignore" });
   execFileSync("git", ["remote", "add", "origin", bare], { cwd: env.vaultRoot, stdio: "ignore" });
   execFileSync("git", ["push", "-q", "origin", "main"], { cwd: env.vaultRoot, stdio: "ignore" });
 
-  const other = temporaryDir("waystation-other-");
+  const other = temporaryDir("vault-wip-other-");
   execFileSync("git", ["clone", "-q", bare, other], { stdio: "ignore" });
   writeFileSync(join(other, "notes", "b.md"), "另一台设备写的\n");
   execFileSync("git", ["add", "-A"], { cwd: other, stdio: "ignore" });

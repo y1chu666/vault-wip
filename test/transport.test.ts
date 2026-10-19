@@ -33,7 +33,7 @@ vi.mock("node:crypto", async () => {
 });
 
 /** 测试用的自签证书。仓库里不放证书，用到时现场生成。 */
-const certificateDir = mkdtempSync(join(tmpdir(), "waystation-tls-"));
+const certificateDir = mkdtempSync(join(tmpdir(), "vault-wip-tls-"));
 const certificate = (() => {
   const keyPath = join(certificateDir, "relay.key");
   const certPath = join(certificateDir, "relay.crt");

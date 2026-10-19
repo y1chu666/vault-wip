@@ -383,7 +383,7 @@ describe("真实仓库上的采集", () => {
     });
 
   beforeAll(async () => {
-    directory = await mkdtemp(join(tmpdir(), "waystation-collect-"));
+    directory = await mkdtemp(join(tmpdir(), "vault-wip-collect-"));
     try {
       await gitVersion(git, directory);
       available = true;
@@ -452,7 +452,7 @@ describe("真实仓库上的采集", () => {
 
     // 仓库的 .git/config 随仓库一起被克隆或同步，属于别人可以影响到的内容。
     // 采集只是只读查询，不该因为跑一次 git status 就把里面写的程序执行起来。
-    const root = await mkdtemp(join(tmpdir(), "waystation-fsmonitor-"));
+    const root = await mkdtemp(join(tmpdir(), "vault-wip-fsmonitor-"));
     try {
       const marker = join(root, "marker.txt");
       const hook = join(root, "hook.sh");
@@ -476,7 +476,7 @@ describe("真实仓库上的采集", () => {
 
     // 属性文件与驱动名都由仓库给出，且随仓库一起流转，因此采集必须自己把仓库
     // 定义过的过滤器压掉，而不是等着仓库不用它们。
-    const root = await mkdtemp(join(tmpdir(), "waystation-filter-"));
+    const root = await mkdtemp(join(tmpdir(), "vault-wip-filter-"));
     try {
       const marker = join(root, "marker.txt");
       const hook = join(root, "hook.sh");
@@ -514,7 +514,7 @@ describe("真实仓库上的采集", () => {
 
     // 驱动定义可以写在被 include 的文件里，而那个文件也能随仓库一起流转；只问
     // .git/config 本体是问不到的，因此这一处要单独盯住。
-    const root = await mkdtemp(join(tmpdir(), "waystation-filter-include-"));
+    const root = await mkdtemp(join(tmpdir(), "vault-wip-filter-include-"));
     try {
       const marker = join(root, "marker.txt");
       const hook = join(root, "hook.sh");
@@ -553,7 +553,7 @@ describe("真实仓库上的采集", () => {
 
     // 驱动名里可以有等号（`[filter "a=b"]`）。若是拼成 `-c filter.a=b.clean=`，git 按
     // 第一个等号拆键值，压住的是另一个键，真正要压的驱动照旧被执行。
-    const root = await mkdtemp(join(tmpdir(), "waystation-filter-equals-"));
+    const root = await mkdtemp(join(tmpdir(), "vault-wip-filter-equals-"));
     try {
       const marker = join(root, "marker.txt");
       const hook = join(root, "hook.sh");
@@ -592,7 +592,7 @@ describe("真实仓库上的采集", () => {
 
     // 开启工作区配置之后，驱动定义可以落在 .git/config.worktree 里；那时只问
     // 本地配置同样问不到，因此这一处也要单独盯住。
-    const root = await mkdtemp(join(tmpdir(), "waystation-filter-worktree-"));
+    const root = await mkdtemp(join(tmpdir(), "vault-wip-filter-worktree-"));
     try {
       const marker = join(root, "marker.txt");
       const hook = join(root, "hook.sh");
