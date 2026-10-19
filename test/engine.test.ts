@@ -815,7 +815,8 @@ describe("序号与回应上限", () => {
     // 采信它会让本机计数停在无法再加一的位置，此后一次也报不上去，连重置都会被
     // 立刻顶回来。中继给出的这种既有序号只会来自异常，因此记一笔异常而不采信。
     const env = await fixture();
-    const key = DeviceKey.generate();
+    // 用本机自己的密钥签：签名与指纹核不过时走的是另一条分支，这里要验的是上界。
+    const key = await deviceKeyOf(env.files);
     const existing = peerRecord({
       key,
       contentKey: await contentKeyOf(env.files),
@@ -835,7 +836,7 @@ describe("序号与回应上限", () => {
     // 本机计数不动，因此两次上报用的是同一个序号，重置之后也仍能继续。
     expect(env.snapshot().sequence).toBe(0);
     expect(env.relay.requests.filter((request) => request.path === "/v1/report").map((request) => request.body["sequence"])).toEqual([1, 1]);
-    expect(env.snapshot().diagnostics.events.some((event) => event.includes("不予采信"))).toBe(true);
+    expect(env.snapshot().diagnostics.events.some((event) => event.includes("已达可表示上界"))).toBe(true);
   });
 
   it("中继截断或舍弃记录时如实写出", async () => {
@@ -943,6 +944,21 @@ describe("远端查询", () => {
 
     expect(existsSync(marker)).toBe(false);
     expect(env.snapshot().remote).toEqual({ kind: "unfetched", remote: "origin", branch: "main" });
+  });
+
+  it("远端地址被写成选项时不去执行", async () => {
+    const env = await pushFromAnotherDevice();
+    const marker = join(temporaryDir("waystation-marker-"), "marker.txt");
+    // 地址以短横线开头时会被 git 当成选项：`--upload-pack=…` 那一句就会被执行。
+    execFileSync("git", ["config", "remote.origin.url", `--upload-pack=sh -c 'touch ${marker}' ://`], {
+      cwd: env.vaultRoot,
+      stdio: "ignore",
+    });
+
+    await env.engine.queryRemote();
+
+    expect(env.snapshot().remote?.kind).toBe("failed");
+    expect(existsSync(marker)).toBe(false);
   });
 
   it("远端多出的提交本机还没见过时如实说出", async () => {
