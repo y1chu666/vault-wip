@@ -3,7 +3,7 @@
 // 文件都放在插件目录下，调用方给出目录，这里只认路径，不认识 Obsidian。
 // 密钥文件落盘时收紧权限，并在同目录写一份只列密钥文件名的 .gitignore：
 // 插件目录若随仓库或同步工具流转，这一步能挡住提交，挡不住使用者主动外发。
-import { chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { generateContentKey, encodeContentKey, decodeContentKey } from "./crypto.js";
@@ -93,10 +93,11 @@ export async function writeTextFile(path: string, text: string, mode?: number): 
   const temporary = `${path}.tmp`;
   try {
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(temporary, encodeText(text));
-    if (mode !== undefined) {
-      await chmod(temporary, mode);
-    }
+    // 先删掉可能留下的临时文件，再以「必须新建」的方式写：权限要在创建时就生效，
+    // 这里写的可能是设备私钥与内容密钥，先按默认权限写再改权限的那一段对同机
+    // 其他用户是可读的。删掉旧文件同时避开别人预先摆在那里的符号链接。
+    await rm(temporary, { force: true });
+    await writeFile(temporary, encodeText(text), mode === undefined ? { flag: "wx" } : { flag: "wx", mode });
     await rename(temporary, path);
   } catch (error) {
     throw new StorageError(t("写入 {path} 失败：{reason}", { path, reason: messageOf(error) }));

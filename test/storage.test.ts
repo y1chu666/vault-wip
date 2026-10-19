@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -100,6 +100,32 @@ describe("文本文件的读写", () => {
       const info = await stat(files.deviceKey);
       expect(info.mode & 0o777).toBe(0o600);
     }
+  });
+
+  it("上一次留下的临时文件不会把宽权限带给密钥", async () => {
+    const files = await temporaryFiles();
+    // 上一次写到一半留下的临时文件：直接覆盖写会沿用它的权限，密钥就成宽权限了。
+    await writeFile(`${files.deviceKey}.tmp`, "旧的");
+
+    await writeTextFile(files.deviceKey, "text", 0o600);
+
+    expect(await readTextFile(files.deviceKey)).toBe("text");
+    if (process.platform !== "win32") {
+      const info = await stat(files.deviceKey);
+      expect(info.mode & 0o777).toBe(0o600);
+    }
+  });
+
+  it("临时文件位置的符号链接不会被顺着写出去", async () => {
+    const files = await temporaryFiles();
+    const other = join(dirname(files.deviceKey), "别处.txt");
+    await writeFile(other, "原样");
+    await symlink(other, `${files.deviceKey}.tmp`);
+
+    await writeTextFile(files.deviceKey, "text", 0o600);
+
+    expect(await readTextFile(other)).toBe("原样");
+    expect(await readTextFile(files.deviceKey)).toBe("text");
   });
 });
 
