@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -867,6 +867,27 @@ describe("远端查询", () => {
     await env.engine.queryRemote();
 
     expect(env.snapshot().remote).toEqual({ kind: "up-to-date", remote: "origin", branch: "main" });
+  });
+
+  it("仓库配置里为远端写下的取回程序不会被执行", async () => {
+    const env = await pushFromAnotherDevice();
+    const marker = join(temporaryDir("waystation-marker-"), "marker.txt");
+    // 本地传输下，git 会为命名的远端执行配置里写下的取回程序。查询按地址发起，
+    // 因此这一项够不到查询这一步；这里把它写进仓库，确认查询没有把它跑起来。
+    execFileSync(
+      "git",
+      [
+        "config",
+        "remote.origin.uploadpack",
+        `sh -c 'echo PWNED > ${marker}; echo ${"0".repeat(40)}\trefs/heads/main'`,
+      ],
+      { cwd: env.vaultRoot, stdio: "ignore" },
+    );
+
+    await env.engine.queryRemote();
+
+    expect(existsSync(marker)).toBe(false);
+    expect(env.snapshot().remote).toEqual({ kind: "unfetched", remote: "origin", branch: "main" });
   });
 
   it("远端多出的提交本机还没见过时如实说出", async () => {

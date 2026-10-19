@@ -3,6 +3,9 @@
 // 只读不写：只用 ls-remote、rev-parse、cat-file 与 rev-list 这类查询子命令，既不拉取
 // 也不写引用，更不改配置。查到的结果只用于本机界面上的显示，不进记录、不上报，
 // 因此别的设备看不到它。
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+
 import { firstLine, type CommandRunner } from "./git.js";
 import { t } from "./i18n.js";
 import { decodeText } from "./text.js";
@@ -12,6 +15,15 @@ export const REMOTE_QUERY_INTERVAL_MS = 10 * 60 * 1000;
 
 /** 一笔提交的标识：四十位小写十六进制。 */
 const HASH_PATTERN = /^[0-9a-f]{40}$/;
+
+/**
+ * 查询远端时所在的目录。
+ *
+ * 查询不能在仓库里发起：远端名、取回程序、地址改写、凭证助手这些都写在仓库自己的
+ * 配置里，其中多数本身就是要执行的命令，git 一读就会跑起来。换一个不在任何仓库里
+ * 的目录来问，仓库的配置就完全参与不进来。
+ */
+export const QUERY_DIRECTORY = tmpdir();
 
 /** 远端查询的结果。失败也照实记下，界面按它显示。 */
 export type RemoteQueryResult =
@@ -60,7 +72,16 @@ export async function queryRemote(
   // 上游正好落在要查的远端上时按上游的分支名走，否则假定同分支同名。
   const targetBranch = upstream !== null && upstream.remote === target ? upstream.branch : branch;
 
-  const listed = await runner(["ls-remote", "--heads", target, `refs/heads/${targetBranch}`], cwd);
+  // 查询只在仓库之外按地址发起：按远端名发出的查询会牵出仓库里为该远端写下的取回
+  // 程序，那是一条执行任意命令的路子。
+  const address = await remoteAddress(runner, cwd, target);
+  if (address === null) {
+    return { kind: "failed", reason: t("读不出远端 {remote} 的地址", { remote: target }) };
+  }
+  const listed = await runner(
+    ["-c", "protocol.ext.allow=never", "ls-remote", "--heads", address, `refs/heads/${targetBranch}`],
+    QUERY_DIRECTORY,
+  );
   if (listed.code !== 0) {
     return { kind: "failed", reason: firstLine(listed.stderr) };
   }
@@ -149,6 +170,36 @@ export function refName(where: { readonly remote: string; readonly branch: strin
 /** 距上次查询是否已经够久，够久才值得自动再问一次。 */
 export function remoteQueryDue(lastCheckedAt: number | null, now: number): boolean {
   return lastCheckedAt === null || now - lastCheckedAt >= REMOTE_QUERY_INTERVAL_MS;
+}
+
+/** 读出远端地址并整理成可直接使用的形式；读不出来时返回 null。 */
+async function remoteAddress(runner: CommandRunner, cwd: string, remote: string): Promise<string | null> {
+  const result = await runner(["remote", "get-url", remote], cwd);
+  if (result.code !== 0) {
+    return null;
+  }
+  const url = decodeText(result.stdout).trim();
+  return url === "" ? null : resolveAddress(url, cwd);
+}
+
+/**
+ * 把远端地址整理成可直接使用的形式。
+ *
+ * 相对路径在 git 里是相对仓库根而言的，而查询要挪到仓库之外发起，因此先按仓库根
+ * 补成绝对路径。带协议、形如 scp 的写法、以短横线之外的符号开头的绝对路径连同
+ * 家目录写法一律原样保留，git 自己认得。
+ */
+export function resolveAddress(url: string, root: string): string {
+  if (
+    url.startsWith("~") ||
+    url.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(url) ||
+    url.includes("://") ||
+    /^[^/]*:/.test(url)
+  ) {
+    return url;
+  }
+  return resolve(root, url);
 }
 
 /** 当前分支名；不在任何分支上时返回 null。 */

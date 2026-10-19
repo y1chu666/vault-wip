@@ -2,17 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import type { CommandResult, CommandRunner } from "../src/core/git.js";
 import {
+  QUERY_DIRECTORY,
   REMOTE_QUERY_INTERVAL_MS,
   parseLsRemote,
   queryRemote,
   refName,
   remoteQueryDue,
   remoteSummary,
+  resolveAddress,
   type RemoteQueryResult,
 } from "../src/core/remote.js";
 
 const HEAD_SHA = "a".repeat(40);
 const REMOTE_SHA = "b".repeat(40);
+const ADDRESS = "https://git.example.invalid/vault.git";
 
 /** 一段输出的字节形式。 */
 function out(text: string): Uint8Array {
@@ -29,11 +32,20 @@ function bad(stderr: string, code = 128): CommandResult {
   return { code, stdout: out(""), stderr };
 }
 
+/** 去掉前置的取值参数，只留子命令本身，便于按命令给出答复。 */
+function withoutConfigArgs(args: readonly string[]): string {
+  let index = 0;
+  while (args[index] === "-c") {
+    index += 2;
+  }
+  return args.slice(index).join(" ");
+}
+
 /** 按整条命令行给出答复的执行方式；没写到的命令一律算意外。 */
 function runnerFor(replies: Record<string, CommandResult>): CommandRunner {
   return (args) => {
-    const reply = replies[args.join(" ")];
-    return Promise.resolve(reply ?? bad(`意外的命令：${args.join(" ")}`));
+    const command = withoutConfigArgs(args);
+    return Promise.resolve(replies[command] ?? bad(`意外的命令：${command}`));
   };
 }
 
@@ -42,7 +54,8 @@ function replies(overrides: Record<string, CommandResult> = {}): Record<string, 
   return {
     "rev-parse --abbrev-ref HEAD": ok("main\n"),
     "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": ok("origin/main\n"),
-    "ls-remote --heads origin refs/heads/main": ok(`${REMOTE_SHA}\trefs/heads/main\n`),
+    "remote get-url origin": ok(`${ADDRESS}\n`),
+    [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok(`${REMOTE_SHA}\trefs/heads/main\n`),
     "rev-parse HEAD": ok(`${HEAD_SHA}\n`),
     [`cat-file -e ${REMOTE_SHA}^{commit}`]: ok(),
     [`rev-list --count ${REMOTE_SHA}..HEAD`]: ok("0\n"),
@@ -54,7 +67,9 @@ function replies(overrides: Record<string, CommandResult> = {}): Record<string, 
 describe("远端查询", () => {
   it("两边指同一笔提交时认为一致", async () => {
     const result = await queryRemote(
-      runnerFor(replies({ "ls-remote --heads origin refs/heads/main": ok(`${HEAD_SHA}\trefs/heads/main\n`) })),
+      runnerFor(
+        replies({ [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`) }),
+      ),
       "/vault",
       "",
     );
@@ -109,7 +124,7 @@ describe("远端查询", () => {
 
   it("远端没有这条分支时如实说出", async () => {
     const result = await queryRemote(
-      runnerFor(replies({ "ls-remote --heads origin refs/heads/main": ok("") })),
+      runnerFor(replies({ [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok("") })),
       "/vault",
       "",
     );
@@ -121,7 +136,7 @@ describe("远端查询", () => {
     const seen: string[] = [];
     const result = await queryRemote(
       (args) => {
-        seen.push(args.join(" "));
+        seen.push(withoutConfigArgs(args));
         return Promise.resolve(ok("HEAD\n"));
       },
       "/vault",
@@ -146,36 +161,72 @@ describe("远端查询", () => {
 
   it("指定了远端就按它查，分支名沿用本地分支", async () => {
     const seen: string[] = [];
+    const table = replies({
+      "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": bad("fatal: no upstream"),
+      "remote get-url mirror": ok(`${ADDRESS}\n`),
+      [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`),
+    });
     const runner: CommandRunner = (args) => {
-      seen.push(args.join(" "));
-      const reply = replies({
-        "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": bad("fatal: no upstream"),
-        "ls-remote --heads mirror refs/heads/main": ok(`${HEAD_SHA}\trefs/heads/main\n`),
-      })[args.join(" ")];
-      return Promise.resolve(reply ?? bad(`意外的命令：${args.join(" ")}`));
+      const command = withoutConfigArgs(args);
+      seen.push(command);
+      return Promise.resolve(table[command] ?? bad(`意外的命令：${command}`));
     };
 
     const result = await queryRemote(runner, "/vault", "mirror");
 
     expect(result).toEqual({ kind: "up-to-date", remote: "mirror", branch: "main" });
-    expect(seen).toContain("ls-remote --heads mirror refs/heads/main");
+    expect(seen).toContain(`ls-remote --heads ${ADDRESS} refs/heads/main`);
   });
 
   it("上游落在别的分支上时沿用上游的分支名", async () => {
     const seen: string[] = [];
+    const table = replies({
+      "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": ok("origin/trunk\n"),
+      [`ls-remote --heads ${ADDRESS} refs/heads/trunk`]: ok(`${HEAD_SHA}\trefs/heads/trunk\n`),
+    });
     const runner: CommandRunner = (args) => {
-      seen.push(args.join(" "));
-      const reply = replies({
-        "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": ok("origin/trunk\n"),
-        "ls-remote --heads origin refs/heads/trunk": ok(`${HEAD_SHA}\trefs/heads/trunk\n`),
-      })[args.join(" ")];
-      return Promise.resolve(reply ?? bad(`意外的命令：${args.join(" ")}`));
+      const command = withoutConfigArgs(args);
+      seen.push(command);
+      return Promise.resolve(table[command] ?? bad(`意外的命令：${command}`));
     };
 
     const result = await queryRemote(runner, "/vault", "");
 
     expect(result).toEqual({ kind: "up-to-date", remote: "origin", branch: "trunk" });
-    expect(seen).toContain("ls-remote --heads origin refs/heads/trunk");
+    expect(seen).toContain(`ls-remote --heads ${ADDRESS} refs/heads/trunk`);
+  });
+
+  it("查询挪到仓库之外发起", async () => {
+    const seen: { readonly command: string; readonly cwd: string }[] = [];
+    const table = replies({
+      [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`),
+    });
+    const runner: CommandRunner = (args, cwd) => {
+      const command = withoutConfigArgs(args);
+      seen.push({ command, cwd });
+      return Promise.resolve(table[command] ?? bad(`意外的命令：${command}`));
+    };
+
+    await queryRemote(runner, "/vault", "");
+
+    // 查询这一步不在仓库里跑：仓库配置里的取回程序、地址改写、凭证助手都写在仓库
+    // 自己的文件里，留在仓库里发起查询就会被它们牵动。
+    const listed = seen.find((call) => call.command.startsWith("ls-remote "));
+    expect(listed?.cwd).toBe(QUERY_DIRECTORY);
+    expect(listed?.cwd).not.toBe("/vault");
+    for (const call of seen.filter((entry) => entry.command.startsWith("rev-parse "))) {
+      expect(call.cwd).toBe("/vault");
+    }
+  });
+
+  it("读不出远端地址时如实说出", async () => {
+    const result = await queryRemote(
+      runnerFor(replies({ "remote get-url origin": bad("fatal: 没有这个远端") })),
+      "/vault",
+      "",
+    );
+
+    expect(result).toEqual({ kind: "failed", reason: "读不出远端 origin 的地址" });
   });
 
   it("远端名以短横线开头时不去问，直接说名字不合规", async () => {
@@ -187,7 +238,9 @@ describe("远端查询", () => {
 
   it("命令失败时把 stderr 的第一行收进提示", async () => {
     const result = await queryRemote(
-      runnerFor(replies({ "ls-remote --heads origin refs/heads/main": bad("fatal: 连不上\n第二行") })),
+      runnerFor(
+        replies({ [`ls-remote --heads ${ADDRESS} refs/heads/main`]: bad("fatal: 连不上\n第二行") }),
+      ),
       "/vault",
       "",
     );
@@ -197,7 +250,9 @@ describe("远端查询", () => {
 
   it("远端给出的标识不像提交时如实说出", async () => {
     const result = await queryRemote(
-      runnerFor(replies({ "ls-remote --heads origin refs/heads/main": ok("zzzz\trefs/heads/main\n") })),
+      runnerFor(
+        replies({ [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok("zzzz\trefs/heads/main\n") }),
+      ),
       "/vault",
       "",
     );
@@ -239,6 +294,25 @@ describe("远端查询", () => {
     );
 
     expect(result).toEqual({ kind: "failed", reason: "无法比较本地与远端" });
+  });
+});
+
+describe("远端地址的整理", () => {
+  it("相对路径按仓库根补成绝对路径", () => {
+    expect(resolveAddress("../other.git", "/vault")).toBe("/other.git");
+    expect(resolveAddress("sub/repo.git", "/vault")).toBe("/vault/sub/repo.git");
+  });
+
+  it("绝对路径、家目录写法、盘符、协议与 scp 写法原样保留", () => {
+    expect(resolveAddress("/srv/git/vault.git", "/vault")).toBe("/srv/git/vault.git");
+    expect(resolveAddress("~/git/vault.git", "/vault")).toBe("~/git/vault.git");
+    expect(resolveAddress("D:/git/vault.git", "/vault")).toBe("D:/git/vault.git");
+    expect(resolveAddress("https://git.example.invalid/vault.git", "/vault")).toBe(
+      "https://git.example.invalid/vault.git",
+    );
+    expect(resolveAddress("git@git.example.invalid:vault.git", "/vault")).toBe(
+      "git@git.example.invalid:vault.git",
+    );
   });
 });
 
