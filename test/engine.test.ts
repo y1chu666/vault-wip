@@ -94,6 +94,7 @@ async function fixture(options: {
   readonly relayName?: string;
   readonly channelId?: string;
   readonly register?: boolean;
+  readonly sequence?: number;
   readonly configure?: (config: Config) => Config;
 } = {}): Promise<Fixture> {
   const base = temporaryDir("waystation-engine-");
@@ -116,7 +117,7 @@ async function fixture(options: {
     await saveState(files.state, {
       version: STATE_VERSION,
       channels: { [relayName]: { channelId, alias: "vault-example" } },
-      sequence: 0,
+      sequence: options.sequence ?? 0,
       peers: [],
       revoked: [],
       retired: false,
@@ -726,6 +727,34 @@ describe("配置与缓存", () => {
 });
 
 describe("序号与回应上限", () => {
+  it("序号到达可表示上界时停止上报，并给出自救办法", async () => {
+    const env = await fixture({ sequence: 2 ** 53 - 1 });
+
+    await env.engine.tick("timer");
+    await env.engine.tick("timer");
+
+    // 发一条中继必然拒绝的记录没有意义，因此这一步干脆不发。
+    expect(env.relay.requests.filter((request) => request.path === "/v1/report")).toEqual([]);
+    const warned = env
+      .snapshot()
+      .diagnostics.events.filter((event) => event.includes("可表示上界"));
+    // 同一句话连着来只记一次：诊断栏不该被同一行刷满。
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toContain("重置本机计数");
+  });
+
+  it("重置计数之后从 1 重新上报", async () => {
+    const env = await fixture({ sequence: 2 ** 53 - 1 });
+
+    await env.engine.resetSequence();
+    expect(env.snapshot().sequence).toBe(0);
+
+    await env.engine.tick("timer");
+
+    const report = env.relay.requests.find((request) => request.path === "/v1/report");
+    expect(report?.body["sequence"]).toBe(1);
+  });
+
   it("中继截断或舍弃记录时如实写出", async () => {
     const env = await fixture();
     const peer = DeviceKey.generate();

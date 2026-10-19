@@ -259,6 +259,26 @@ export default class VaultWaystationPlugin extends Plugin {
     }
   }
 
+  /**
+   * 重置本机序号。
+   *
+   * 平时没有人需要按这个按钮：序号由本设备自己推进。它只在序号已经无法继续推进时
+   * 才有用，界面上也写清了这一点，因此不再另加确认步骤之外的阻隔。
+   */
+  async resetSequence(): Promise<void> {
+    const engine = this.engine;
+    if (engine === null) {
+      return;
+    }
+    try {
+      await engine.resetSequence();
+      new Notice(`${PLUGIN_NAME}：本机计数已重置`);
+    } catch (error) {
+      new Notice(`${PLUGIN_NAME}：${describe(error)}`, 0);
+    }
+    this.refresh();
+  }
+
   /** 手工触发一次采集与上报。 */
   async reportNow(): Promise<void> {
     await this.tick("timer");

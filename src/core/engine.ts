@@ -61,6 +61,14 @@ import {
 /** 诊断信息里保留的条数上限。 */
 const MAX_DIAGNOSTICS = 50;
 
+/**
+ * 序号的上界，与中继一致。
+ *
+ * 序号以普通数值表示，越过这个上界就无法再精确加一；与其发出一条中继必然拒绝的
+ * 记录，不如停在本地并说清该怎么办。
+ */
+const MAX_SEQUENCE = 2 ** 53 - 1;
+
 /** 引擎手里可改动的状态；落盘时按 {@link PersistedState} 的形状写出。 */
 interface EngineState {
   version: number;
@@ -162,6 +170,7 @@ export class Engine {
   private anomalies: SequenceAnomaly[] = [];
   private dropped: DroppedRecord[] = [];
   private events: string[] = [];
+  private lastNote: string | null = null;
   private relayStatus = new Map<string, { lastSuccessAt: Date | null; lastFailure: string | null }>();
   private failureSince: number | null = null;
   private stopped = false;
@@ -370,6 +379,20 @@ export class Engine {
     }
   }
 
+  /**
+   * 把本机序号重置到起点。
+   *
+   * 序号平时由本设备自己推进，用不着人管；只有它到了无法继续推进的地步（例如被
+   * 一份越界的既有记录顶到了上界），才由使用者核对状态之后手动重置。重置只改本机
+   * 记录，中继上的数据一条不动，因此事后仍能从诊断里看出先前发生过什么。
+   */
+  async resetSequence(): Promise<void> {
+    this.state.sequence = 0;
+    this.note("本机计数已重置为 0，下一次上报将按中继给出的序号重新对齐");
+    await this.persist();
+    this.options.onChange?.();
+  }
+
   /** 内容密钥的文本形式，供逐字传递或写入导出文件。 */
   contentKeyText(): string {
     return encodeContentKey(this.contentKey);
@@ -485,7 +508,9 @@ export class Engine {
     this.state.sequence = rejected;
     const again = await this.reportRound(content);
     if (again !== null) {
-      this.note("按中继给出的序号重报之后仍被拒：同一份身份可能被复制到了另一台设备上");
+      this.note(
+        "按中继给出的序号重报之后仍被拒：同一份身份可能被复制到了另一台设备上，或本机计数已不可用；请在诊断栏核对状态",
+      );
     }
   }
 
@@ -496,6 +521,13 @@ export class Engine {
     }
 
     const sequence = nextSequence(this.state.sequence);
+    // 序号已经加到无法精确表示时，上报只会被中继拒绝；停在这里并说清自救办法。
+    if (sequence > MAX_SEQUENCE) {
+      this.note(
+        `本机计数已达可表示上界（${String(MAX_SEQUENCE)}），本次不上报：请在诊断栏核对状态后重置本机计数`,
+      );
+      return null;
+    }
     const collectedAt = this.now();
     const collectedAtText = formatRfc3339(collectedAt);
     const encrypted = encryptContent(this.contentKey, encodeStatusPayload(content));
@@ -748,6 +780,11 @@ export class Engine {
 
   /** 记一笔事件。 */
   private note(message: string): void {
+    // 同一句话连着来就没有新的信息：中继一直不回话时，诊断栏不该被同一行刷满。
+    if (message === this.lastNote) {
+      return;
+    }
+    this.lastNote = message;
     this.events = [...this.events.slice(-(MAX_DIAGNOSTICS - 1)), `${formatRfc3339(this.now())} ${message}`];
     this.options.log?.(message);
   }

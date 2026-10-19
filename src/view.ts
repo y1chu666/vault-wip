@@ -31,6 +31,7 @@ export class WaystationView extends ItemView {
   private securityDynamic: HTMLElement | null = null;
   private securityBuilt = false;
   private confirmRetire = false;
+  private confirmResetSequence = false;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -231,6 +232,24 @@ export class WaystationView extends ItemView {
       ["耗时", snapshot.diagnostics.collectMillis === null ? "未知" : `${String(snapshot.diagnostics.collectMillis)} 毫秒`],
       ["git 版本", snapshot.diagnostics.gitVersion ?? "未知"],
     ]);
+
+    heading(pane, "本机计数");
+    table(pane, [["已上报序号", String(snapshot.sequence)]]);
+    pane.createDiv({
+      text: "序号由本设备自己推进，平时不必过问。只有在它已经无法继续推进时（例如上一条记录越过了可表示范围），才需要在这里重置；重置只改本机计数，中继上的数据一条不动。",
+    });
+    const countRow = pane.createDiv({ cls: "waystation-actions" });
+    const resetButton = countRow.createEl("button", { text: "重置本机计数" });
+    resetButton.onclick = () => {
+      if (!this.confirmResetSequence) {
+        this.confirmResetSequence = true;
+        resetButton.setText("确认重置：下一次上报将从 1 重新对齐");
+        return;
+      }
+      this.confirmResetSequence = false;
+      resetButton.setText("重置本机计数");
+      void this.plugin.resetSequence();
+    };
 
     heading(pane, "事件");
     if (snapshot.diagnostics.events.length === 0) {
