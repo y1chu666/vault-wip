@@ -303,7 +303,7 @@ describe("上报", () => {
       await expect(client.report(input)).rejects.toThrow(/吊销名单不是数组/);
 
       relay.reply = { status: 200, body: { accepted: true, records: [], revocations: [1] } };
-      await expect(client.report(input)).rejects.toThrow(/吊销记录不是一个对象/);
+      expect((await client.report(input)).skipped[0]).toMatch(/吊销记录不是一个对象/);
 
       relay.reply = {
         status: 200,
@@ -391,6 +391,38 @@ describe("上报", () => {
       expect(reply.truncated).toBe(true);
       expect(reply.own).toBeNull();
       expect(reply.skipped).toHaveLength(3);
+    } finally {
+      await relay.close();
+    }
+  });
+
+  it("一条读不出来的吊销纪录不牵连其余条目", async () => {
+    // 吊销名单同样只舍弃读不出来的那一条：整份作废会让同频道的对端一直看不到
+    // 其余吊销纪录，而被丢掉的往往只是一条本就可疑的条目。
+    const relay = await startFakeRelay(false);
+    try {
+      const key = DeviceKey.generate();
+      const peer = DeviceKey.generate();
+      relay.devicePublicKey = key.publicKey;
+      const client = clientFor(relay, { level: "plaintext", key });
+      const good = { fingerprint: peer.fingerprint, by: key.fingerprint, at: "2023-11-14T22:15:23Z" };
+      relay.reply = {
+        status: 200,
+        body: { accepted: true, records: [], revocations: [1, good, { fingerprint: peer.fingerprint }] },
+      };
+
+      const reply = await client.report({
+        channelId: "aa".repeat(16),
+        sequence: 1,
+        collectedAt: "2023-11-14T22:15:23Z",
+        payload,
+        signature: new Uint8Array(64),
+      });
+
+      expect(reply.revocations.map((item) => item.fingerprint)).toEqual([peer.fingerprint]);
+      expect(reply.skipped).toHaveLength(2);
+      expect(reply.skipped[0]).toMatch(/吊销记录不是一个对象/);
+      expect(reply.skipped[1]).toMatch(/缺少吊销记录中的发起设备/);
     } finally {
       await relay.close();
     }

@@ -589,7 +589,7 @@ export class Engine {
       // 舍弃与截断都要说出来：不言不语的「少了几条」会被当成对方没有改动。
       if (reply.skipped.length > 0) {
         this.note(
-          `中继 ${client.name} 回送的记录里有 ${String(reply.skipped.length)} 条读不出来，已放弃：${reply.skipped[0] ?? ""}`,
+          `中继 ${client.name} 回送的内容里有 ${String(reply.skipped.length)} 条读不出来，已放弃：${reply.skipped[0] ?? ""}`,
         );
       }
       if (reply.truncated) {

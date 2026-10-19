@@ -184,7 +184,7 @@ export class RelayClient {
       accepted: reply.accepted,
       own,
       records: readRecords(reply.records, skipped),
-      revocations: readRevocations(reply.revocations),
+      revocations: readRevocations(reply.revocations, skipped),
       truncated: reply.truncated === true,
       skipped,
       pin: this.requirePin(),
@@ -466,21 +466,46 @@ function readRecords(raw: unknown, skipped: string[]): PeerRecord[] {
   return records;
 }
 
-function readRevocations(raw: unknown): RevocationRecord[] {
+/**
+ * 读一条吊销纪录，读不出来就记下原因并放弃这一条。
+ *
+ * 与记录一样，一条坏条目不该让整份回应作废：那样同频道的对端会一直同步不到
+ * 任何状态，而丢掉的往往只是一条本就可疑的条目，原因写进诊断由使用者判断。
+ */
+function readRevocationOrNull(raw: unknown, skipped: string[], what: string): RevocationRecord | null {
+  try {
+    return readRevocation(raw);
+  } catch (error) {
+    skipped.push(`${what}：${messageOf(error)}`);
+    return null;
+  }
+}
+
+function readRevocation(raw: unknown): RevocationRecord {
+  if (typeof raw !== "object" || raw === null) {
+    throw new RelayError("transport", "中继给出的吊销记录不是一个对象");
+  }
+  const fields = raw as Record<string, unknown>;
+  return {
+    fingerprint: readString(fields["fingerprint"], "吊销记录中的设备指纹"),
+    by: readString(fields["by"], "吊销记录中的发起设备"),
+    at: readString(fields["at"], "吊销记录中的时间"),
+  };
+}
+
+function readRevocations(raw: unknown, skipped: string[]): RevocationRecord[] {
   if (!Array.isArray(raw)) {
     throw new RelayError("transport", "中继给出的吊销名单不是数组");
   }
-  return raw.map((entry) => {
-    if (typeof entry !== "object" || entry === null) {
-      throw new RelayError("transport", "中继给出的吊销记录不是一个对象");
+  const entries = raw as unknown[];
+  const revocations: RevocationRecord[] = [];
+  for (const entry of entries) {
+    const revocation = readRevocationOrNull(entry, skipped, "一条吊销纪录");
+    if (revocation !== null) {
+      revocations.push(revocation);
     }
-    const fields = entry as Record<string, unknown>;
-    return {
-      fingerprint: readString(fields["fingerprint"], "吊销记录中的设备指纹"),
-      by: readString(fields["by"], "吊销记录中的发起设备"),
-      at: readString(fields["at"], "吊销记录中的时间"),
-    };
-  });
+  }
+  return revocations;
 }
 
 function decodeBase64(value: unknown, what: string): Uint8Array {
