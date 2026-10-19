@@ -2,6 +2,7 @@
   "name": "vault-waystation",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "多端交替使用同一笔记仓库时，互相感知未提交改动",
   "type": "module",
   "engines": {
