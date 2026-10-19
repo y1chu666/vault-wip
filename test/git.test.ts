@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -199,8 +199,8 @@ describe("collectStatus", () => {
   function stubRunner(overrides: Record<string, CommandResult> = {}): CommandRunner {
     const defaults: Record<string, CommandResult> = {
       "status --porcelain=v2 -z --branch": result(statusFixture),
-      "diff --raw -z --ignore-cr-at-eol": result(unstagedDiffFixture),
-      "diff --raw -z --ignore-cr-at-eol --cached": result(stagedDiffFixture),
+      "diff --raw -z --ignore-cr-at-eol --no-ext-diff": result(unstagedDiffFixture),
+      "diff --raw -z --ignore-cr-at-eol --no-ext-diff --cached": result(stagedDiffFixture),
     };
     const table = { ...defaults, ...overrides };
 
@@ -257,8 +257,8 @@ describe("collectStatus", () => {
     const collected = await collectStatus(
       stubRunner({
         "status --porcelain=v2 -z --branch": result(unmergedStatusFixture),
-        "diff --raw -z --ignore-cr-at-eol": result(Buffer.alloc(0)),
-        "diff --raw -z --ignore-cr-at-eol --cached": result(Buffer.alloc(0)),
+        "diff --raw -z --ignore-cr-at-eol --no-ext-diff": result(Buffer.alloc(0)),
+        "diff --raw -z --ignore-cr-at-eol --no-ext-diff --cached": result(Buffer.alloc(0)),
       }),
       "/repo",
     );
@@ -344,6 +344,30 @@ describe("真实仓库上的采集", () => {
     const missing = createCommandRunner("/并不存在的/git");
 
     await expect(gitVersion(missing, directory)).rejects.toBeInstanceOf(CollectError);
+  });
+
+  it("只读查询不执行仓库配置指定的程序", async () => {
+    if (!available) {
+      return;
+    }
+
+    // 仓库的 .git/config 随仓库一起被克隆或同步，属于别人可以影响到的内容。
+    // 采集只是只读查询，不该因为跑一次 git status 就把里面写的程序执行起来。
+    const root = await mkdtemp(join(tmpdir(), "waystation-fsmonitor-"));
+    try {
+      const marker = join(root, "marker.txt");
+      const hook = join(root, "hook.sh");
+      await writeFile(hook, `#!/bin/sh\necho 执行了 >> "${marker}"\nprintf "1\\n"\n`, { mode: 0o755 });
+      await git(["init", "-q", "."], root);
+      await git(["config", "core.fsmonitor", hook], root);
+      await writeFile(join(root, "a.md"), "alpha\n");
+
+      await collectStatus(git, root);
+
+      await expect(readFile(marker)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("git 迟迟不返回时放弃本次采集", async () => {

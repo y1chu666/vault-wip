@@ -73,6 +73,16 @@ const ZERO_HASH = "0000000000000000000000000000000000000000";
 /** 采集超时（毫秒）。仓库异常大或位于网络盘时宁可放弃一次采集，也不要挂住上报。 */
 const COLLECT_TIMEOUT_MS = 10_000;
 
+/**
+ * 每条命令都前置的取值，用来压过仓库自身配置。
+ *
+ * 仓库的 .git/config 随仓库一起被克隆、同步或改动，属于别人可以影响到的内容。
+ * 其中的 core.fsmonitor 会让 git 执行指定的程序，diff.external 同理；采集只是
+ * 只读查询，不该因此以本进程的权限执行仓库指定的任何程序。命令行取值的优先级
+ * 高于仓库配置，因此这几项一旦写在这里，仓库里怎么写都不会被调用。
+ */
+const SAFE_CONFIG_ARGS: readonly string[] = ["-c", "core.fsmonitor=false", "-c", "diff.external="];
+
 /** 默认的命令执行方式：不经外壳，直接调用可执行文件。 */
 export function createCommandRunner(gitPath: string, timeoutMs = COLLECT_TIMEOUT_MS): CommandRunner {
   const executable = gitPath === "" ? "git" : gitPath;
@@ -81,7 +91,7 @@ export function createCommandRunner(gitPath: string, timeoutMs = COLLECT_TIMEOUT
     new Promise((resolve, reject) => {
       execFile(
         executable,
-        [...args],
+        [...SAFE_CONFIG_ARGS, ...args],
         {
           cwd,
           timeout: timeoutMs,
@@ -195,7 +205,9 @@ async function detectFalseConflicts(
 }
 
 function runDiff(runner: CommandRunner, cwd: string, staged: boolean): Promise<CommandResult> {
-  const args = ["diff", "--raw", "-z", "--ignore-cr-at-eol"];
+  // --no-ext-diff 显式关掉外部差异程序：raw 格式本就用不到它，写在这里是为了
+  // 即便日后改动了参数，也不会顺手把仓库配置里的程序带上。
+  const args = ["diff", "--raw", "-z", "--ignore-cr-at-eol", "--no-ext-diff"];
   if (staged) {
     args.push("--cached");
   }
