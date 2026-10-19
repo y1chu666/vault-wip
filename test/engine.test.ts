@@ -724,3 +724,55 @@ describe("配置与缓存", () => {
     expect(env.engine.nextTimerSeconds()).toBe(30);
   });
 });
+
+describe("序号与回应上限", () => {
+  it("中继截断或舍弃记录时如实写出", async () => {
+    const env = await fixture();
+    const peer = DeviceKey.generate();
+    const good = recordDTO(
+      peerRecord({
+        key: peer,
+        contentKey: await contentKeyOf(env.files),
+        channelId: "aa".repeat(16),
+        sequence: 3,
+        collectedAt: "2023-11-14T22:15:23Z",
+        payload: statusContent("对端笔记本", ["notes/a.md"]),
+      }),
+    );
+
+    env.relay.reply = (request) =>
+      request.path === "/v1/register"
+        ? { status: 200, body: {} }
+        : {
+            status: 200,
+            body: {
+              accepted: true,
+              truncated: true,
+              records: [good, { ...good, sequence: 2 ** 53 }],
+              revocations: [],
+            },
+          };
+
+    await env.engine.tick("timer");
+
+    const snapshot = env.snapshot();
+    // 读不出来的一条被舍掉，读得出来的照样并进来。
+    expect(snapshot.peers.map((item) => item.fingerprint)).toEqual([peer.fingerprint]);
+    expect(snapshot.diagnostics.events.some((event) => event.includes("读不出来"))).toBe(true);
+    expect(snapshot.diagnostics.events.some((event) => event.includes("已达上限"))).toBe(true);
+  });
+
+  it("把中继自己写的说明记进诊断", async () => {
+    const env = await fixture();
+    const wording = "序号超出可表示范围（上界 9007199254740991）：请在客户端核对本机计数后重置";
+    env.relay.reply = () => ({ status: 400, body: { error: { code: "bad_request", message: wording } } });
+
+    await env.engine.tick("timer");
+
+    const failure = env
+      .snapshot()
+      .diagnostics.events.find((event) => event.includes("通信失败"));
+    expect(failure).toContain("中继说明");
+    expect(failure).toContain(wording);
+  });
+});

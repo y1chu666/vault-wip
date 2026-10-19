@@ -553,6 +553,16 @@ export class Engine {
 
       this.mergeRecords(client.name, channelId, reply.records);
       this.applyRevocations(reply.revocations);
+
+      // 舍弃与截断都要说出来：不言不语的「少了几条」会被当成对方没有改动。
+      if (reply.skipped.length > 0) {
+        this.note(
+          `中继 ${client.name} 回送的记录里有 ${String(reply.skipped.length)} 条读不出来，已放弃：${reply.skipped[0] ?? ""}`,
+        );
+      }
+      if (reply.truncated) {
+        this.note(`中继 ${client.name} 回送的记录已达上限，本次只取回一部分，其余下一轮再取`);
+      }
     });
 
     if (accepted) {
@@ -771,7 +781,12 @@ function short(fingerprint: string): string {
 
 /** 把错误说成人能读的一句话；各模块自带的错误本就写清了原因。 */
 function describe(error: unknown): string {
-  if (error instanceof RelayError || error instanceof CollectError || error instanceof StorageError) {
+  if (error instanceof RelayError) {
+    // 中继自己写的说明只作留痕：有些问题只有它说得清，例如序号越过了可表示的范围。
+    const server = error.detail.serverMessage;
+    return server === undefined || server === "" ? error.message : `${error.message}（中继说明：${server}）`;
+  }
+  if (error instanceof CollectError || error instanceof StorageError) {
     return error.message;
   }
   return error instanceof Error ? error.message : String(error);

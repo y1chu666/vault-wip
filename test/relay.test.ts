@@ -242,15 +242,16 @@ describe("上报", () => {
       };
 
       const client = clientFor(relay, { level: "plaintext", key });
-      await expect(
-        client.report({
-          channelId: "aa".repeat(16),
-          sequence: 1,
-          collectedAt: "2023-11-14T22:15:23Z",
-          payload,
-          signature: new Uint8Array(64),
-        }),
-      ).rejects.toThrow(/公钥与设备指纹不符/);
+      const reply = await client.report({
+        channelId: "aa".repeat(16),
+        sequence: 1,
+        collectedAt: "2023-11-14T22:15:23Z",
+        payload,
+        signature: new Uint8Array(64),
+      });
+
+      expect(reply.records).toEqual([]);
+      expect(reply.skipped[0]).toMatch(/公钥与设备指纹不符/);
     } finally {
       await relay.close();
     }
@@ -277,7 +278,7 @@ describe("上报", () => {
       await expect(client.report(input)).rejects.toThrow(/记录清单不是数组/);
 
       relay.reply = { status: 200, body: { accepted: true, records: [1], revocations: [] } };
-      await expect(client.report(input)).rejects.toThrow(/不是一个对象/);
+      expect((await client.report(input)).skipped[0]).toMatch(/不是一个对象/);
 
       relay.reply = {
         status: 200,
@@ -296,7 +297,7 @@ describe("上报", () => {
           revocations: [],
         },
       };
-      await expect(client.report(input)).rejects.toThrow(/公钥与设备指纹不符/);
+      expect((await client.report(input)).skipped[0]).toMatch(/公钥与设备指纹不符/);
 
       relay.reply = { status: 200, body: { accepted: true, records: [], revocations: "×" } };
       await expect(client.report(input)).rejects.toThrow(/吊销名单不是数组/);
@@ -321,7 +322,7 @@ describe("上报", () => {
           revocations: [],
         },
       };
-      await expect(client.report(input)).rejects.toThrow(/记录序号不合规/);
+      expect((await client.report(input)).skipped[0]).toMatch(/记录序号不合规/);
 
       relay.reply = {
         status: 200,
@@ -340,7 +341,56 @@ describe("上报", () => {
           revocations: [],
         },
       };
-      await expect(client.report(input)).rejects.toThrow(/记录内容是空的/);
+      expect((await client.report(input)).skipped[0]).toMatch(/记录内容是空的/);
+    } finally {
+      await relay.close();
+    }
+  });
+
+  it("一条读不出来的记录不牵连其余记录", async () => {
+    // 中继上只要有一台设备写进越界或不成形的记录，整批作废就会让同频道其他设备
+    // 永远同步不到任何状态；舍弃的范围必须只限这一条，且逐条说明原因。
+    const relay = await startFakeRelay(false);
+    try {
+      const key = DeviceKey.generate();
+      const peer = DeviceKey.generate();
+      relay.devicePublicKey = key.publicKey;
+      const client = clientFor(relay, { level: "plaintext", key });
+      const record = {
+        fingerprint: peer.fingerprint,
+        public_key: Buffer.from(peer.publicKey).toString("base64"),
+        sequence: 7,
+        collected_at: "2023-11-14T22:15:23Z",
+        payload: Buffer.from(payload).toString("base64"),
+        signature: Buffer.alloc(64).toString("base64"),
+      };
+      relay.reply = {
+        status: 200,
+        body: {
+          accepted: true,
+          truncated: true,
+          own: { sequence: 9007199254740993 },
+          records: [
+            record,
+            { ...record, fingerprint: "aa", sequence: 1 },
+            { ...record, sequence: 9007199254740993 },
+          ],
+          revocations: [],
+        },
+      };
+
+      const reply = await client.report({
+        channelId: "aa".repeat(16),
+        sequence: 1,
+        collectedAt: "2023-11-14T22:15:23Z",
+        payload,
+        signature: new Uint8Array(64),
+      });
+
+      expect(reply.records.map((item) => item.fingerprint)).toEqual([peer.fingerprint]);
+      expect(reply.truncated).toBe(true);
+      expect(reply.own).toBeNull();
+      expect(reply.skipped).toHaveLength(3);
     } finally {
       await relay.close();
     }

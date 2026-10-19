@@ -79,6 +79,10 @@ export interface ReportReply {
   readonly own: PeerRecord | null;
   readonly records: readonly PeerRecord[];
   readonly revocations: readonly RevocationRecord[];
+  /** 中继是否因大小或条数上限截断了记录清单：截断时本次视图不完整。 */
+  readonly truncated: boolean;
+  /** 读不出来而放弃的记录，逐条附原因，只作诊断留痕。 */
+  readonly skipped: readonly string[];
   /** 本次通信后应当记下的钉住信息。 */
   readonly pin: RelayPin;
 }
@@ -157,6 +161,7 @@ export class RelayClient {
       own?: unknown;
       records?: unknown;
       revocations?: unknown;
+      truncated?: unknown;
     }>(REQUEST_PATHS.report, {
       channel_id: input.channelId,
       sequence: input.sequence,
@@ -169,11 +174,19 @@ export class RelayClient {
       throw new RelayError("transport", "中继的回应里没有说明上报是否被接受");
     }
 
+    const skipped: string[] = [];
+    const own =
+      reply.own === undefined || reply.own === null
+        ? null
+        : readRecordOrNull(reply.own, skipped, "本设备的记录");
+
     return {
       accepted: reply.accepted,
-      own: reply.own === undefined || reply.own === null ? null : readRecord(reply.own),
-      records: readRecords(reply.records),
+      own,
+      records: readRecords(reply.records, skipped),
       revocations: readRevocations(reply.revocations),
+      truncated: reply.truncated === true,
+      skipped,
       pin: this.requirePin(),
     };
   }
@@ -422,11 +435,35 @@ function readRecord(raw: unknown): PeerRecord {
   };
 }
 
-function readRecords(raw: unknown): PeerRecord[] {
+/**
+ * 读一条记录，读不出来就记下原因并放弃这一条。
+ *
+ * 一条读不出来的记录不该让整批记录作废：中继上只要有一台设备写进了越界或不
+ * 成形的记录，同频道其他设备就会永远同步不到任何状态。舍弃的范围仅限这一条，
+ * 原因写进诊断，由使用者判断要不要处理。
+ */
+function readRecordOrNull(raw: unknown, skipped: string[], what: string): PeerRecord | null {
+  try {
+    return readRecord(raw);
+  } catch (error) {
+    skipped.push(`${what}：${messageOf(error)}`);
+    return null;
+  }
+}
+
+function readRecords(raw: unknown, skipped: string[]): PeerRecord[] {
   if (!Array.isArray(raw)) {
     throw new RelayError("transport", "中继给出的记录清单不是数组");
   }
-  return raw.map((entry) => readRecord(entry));
+  const entries = raw as unknown[];
+  const records: PeerRecord[] = [];
+  for (const entry of entries) {
+    const record = readRecordOrNull(entry, skipped, "一条对端记录");
+    if (record !== null) {
+      records.push(record);
+    }
+  }
+  return records;
 }
 
 function readRevocations(raw: unknown): RevocationRecord[] {
