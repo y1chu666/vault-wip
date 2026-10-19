@@ -74,12 +74,17 @@ export async function queryRemote(
 
   // 查询只在仓库之外按地址发起：按远端名发出的查询会牵出仓库里为该远端写下的取回
   // 程序，那是一条执行任意命令的路子。
-  const address = await remoteAddress(runner, cwd, target);
-  if (address === null) {
+  const url = await remoteAddress(runner, cwd, target);
+  if (url === null) {
     return { kind: "failed", reason: t("读不出远端 {remote} 的地址", { remote: target }) };
   }
+  if (url.startsWith("-")) {
+    // 以短横线起头的地址会被 git 当成选项：仓库把远端地址写成 `--upload-pack=…`，
+    // 那一句就会被当作取回程序执行。地址后面另加一条 `--` 作分隔，双重保险。
+    return { kind: "failed", reason: t("远端地址不合规，已跳过查询") };
+  }
   const listed = await runner(
-    ["-c", "protocol.ext.allow=never", "ls-remote", "--heads", address, `refs/heads/${targetBranch}`],
+    ["-c", "protocol.ext.allow=never", "ls-remote", "--heads", "--", resolveAddress(url, cwd), `refs/heads/${targetBranch}`],
     QUERY_DIRECTORY,
   );
   if (listed.code !== 0) {
@@ -172,14 +177,14 @@ export function remoteQueryDue(lastCheckedAt: number | null, now: number): boole
   return lastCheckedAt === null || now - lastCheckedAt >= REMOTE_QUERY_INTERVAL_MS;
 }
 
-/** 读出远端地址并整理成可直接使用的形式；读不出来时返回 null。 */
+/** 读出远端地址；读不出来时返回 null。 */
 async function remoteAddress(runner: CommandRunner, cwd: string, remote: string): Promise<string | null> {
   const result = await runner(["remote", "get-url", remote], cwd);
   if (result.code !== 0) {
     return null;
   }
   const url = decodeText(result.stdout).trim();
-  return url === "" ? null : resolveAddress(url, cwd);
+  return url === "" ? null : url;
 }
 
 /**

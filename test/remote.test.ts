@@ -55,7 +55,7 @@ function replies(overrides: Record<string, CommandResult> = {}): Record<string, 
     "rev-parse --abbrev-ref HEAD": ok("main\n"),
     "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": ok("origin/main\n"),
     "remote get-url origin": ok(`${ADDRESS}\n`),
-    [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok(`${REMOTE_SHA}\trefs/heads/main\n`),
+    [`ls-remote --heads -- ${ADDRESS} refs/heads/main`]: ok(`${REMOTE_SHA}\trefs/heads/main\n`),
     "rev-parse HEAD": ok(`${HEAD_SHA}\n`),
     [`cat-file -e ${REMOTE_SHA}^{commit}`]: ok(),
     [`rev-list --count ${REMOTE_SHA}..HEAD`]: ok("0\n"),
@@ -68,7 +68,7 @@ describe("远端查询", () => {
   it("两边指同一笔提交时认为一致", async () => {
     const result = await queryRemote(
       runnerFor(
-        replies({ [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`) }),
+        replies({ [`ls-remote --heads -- ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`) }),
       ),
       "/vault",
       "",
@@ -124,7 +124,7 @@ describe("远端查询", () => {
 
   it("远端没有这条分支时如实说出", async () => {
     const result = await queryRemote(
-      runnerFor(replies({ [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok("") })),
+      runnerFor(replies({ [`ls-remote --heads -- ${ADDRESS} refs/heads/main`]: ok("") })),
       "/vault",
       "",
     );
@@ -164,7 +164,7 @@ describe("远端查询", () => {
     const table = replies({
       "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": bad("fatal: no upstream"),
       "remote get-url mirror": ok(`${ADDRESS}\n`),
-      [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`),
+      [`ls-remote --heads -- ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`),
     });
     const runner: CommandRunner = (args) => {
       const command = withoutConfigArgs(args);
@@ -175,14 +175,14 @@ describe("远端查询", () => {
     const result = await queryRemote(runner, "/vault", "mirror");
 
     expect(result).toEqual({ kind: "up-to-date", remote: "mirror", branch: "main" });
-    expect(seen).toContain(`ls-remote --heads ${ADDRESS} refs/heads/main`);
+    expect(seen).toContain(`ls-remote --heads -- ${ADDRESS} refs/heads/main`);
   });
 
   it("上游落在别的分支上时沿用上游的分支名", async () => {
     const seen: string[] = [];
     const table = replies({
       "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": ok("origin/trunk\n"),
-      [`ls-remote --heads ${ADDRESS} refs/heads/trunk`]: ok(`${HEAD_SHA}\trefs/heads/trunk\n`),
+      [`ls-remote --heads -- ${ADDRESS} refs/heads/trunk`]: ok(`${HEAD_SHA}\trefs/heads/trunk\n`),
     });
     const runner: CommandRunner = (args) => {
       const command = withoutConfigArgs(args);
@@ -193,13 +193,13 @@ describe("远端查询", () => {
     const result = await queryRemote(runner, "/vault", "");
 
     expect(result).toEqual({ kind: "up-to-date", remote: "origin", branch: "trunk" });
-    expect(seen).toContain(`ls-remote --heads ${ADDRESS} refs/heads/trunk`);
+    expect(seen).toContain(`ls-remote --heads -- ${ADDRESS} refs/heads/trunk`);
   });
 
   it("查询挪到仓库之外发起", async () => {
     const seen: { readonly command: string; readonly cwd: string }[] = [];
     const table = replies({
-      [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`),
+      [`ls-remote --heads -- ${ADDRESS} refs/heads/main`]: ok(`${HEAD_SHA}\trefs/heads/main\n`),
     });
     const runner: CommandRunner = (args, cwd) => {
       const command = withoutConfigArgs(args);
@@ -217,6 +217,23 @@ describe("远端查询", () => {
     for (const call of seen.filter((entry) => entry.command.startsWith("rev-parse "))) {
       expect(call.cwd).toBe("/vault");
     }
+  });
+
+  it("地址以短横线开头时不去问，直接跳过", async () => {
+    // 仓库里把远端地址写成 `--upload-pack=…`，git 会把它当成选项而不是地址：
+    // 那一句就会被当作取回程序执行，因此这种地址一律不送去查询。
+    const seen: string[] = [];
+    const table = replies({ "remote get-url origin": ok("--upload-pack=sh -c 'touch 别处' ://\n") });
+    const runner: CommandRunner = (args) => {
+      const command = withoutConfigArgs(args);
+      seen.push(command);
+      return Promise.resolve(table[command] ?? bad(`意外的命令：${command}`));
+    };
+
+    const result = await queryRemote(runner, "/vault", "");
+
+    expect(result).toEqual({ kind: "failed", reason: "远端地址不合规，已跳过查询" });
+    expect(seen.some((command) => command.startsWith("ls-remote "))).toBe(false);
   });
 
   it("读不出远端地址时如实说出", async () => {
@@ -239,7 +256,7 @@ describe("远端查询", () => {
   it("命令失败时把 stderr 的第一行收进提示", async () => {
     const result = await queryRemote(
       runnerFor(
-        replies({ [`ls-remote --heads ${ADDRESS} refs/heads/main`]: bad("fatal: 连不上\n第二行") }),
+        replies({ [`ls-remote --heads -- ${ADDRESS} refs/heads/main`]: bad("fatal: 连不上\n第二行") }),
       ),
       "/vault",
       "",
@@ -251,7 +268,7 @@ describe("远端查询", () => {
   it("远端给出的标识不像提交时如实说出", async () => {
     const result = await queryRemote(
       runnerFor(
-        replies({ [`ls-remote --heads ${ADDRESS} refs/heads/main`]: ok("zzzz\trefs/heads/main\n") }),
+        replies({ [`ls-remote --heads -- ${ADDRESS} refs/heads/main`]: ok("zzzz\trefs/heads/main\n") }),
       ),
       "/vault",
       "",

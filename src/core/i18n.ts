@@ -544,6 +544,7 @@ export const ENGLISH = {
   // 远端查询：结果与失败。
   "远端名不合规：{remote}": "the remote name is not valid: {remote}",
   "读不出远端 {remote} 的地址": "cannot read the address of remote {remote}",
+  "远端地址不合规，已跳过查询": "the address of the remote is not valid, so the query is skipped",
   "远端给出的提交标识不合规": "the commit id the remote gave is not valid",
   "无法比较本地与远端": "this machine and the remote cannot be compared",
   "尚未查询": "not queried yet",
