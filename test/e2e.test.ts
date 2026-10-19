@@ -24,7 +24,8 @@ const SECOND_LABEL = "示例设备乙";
 const ALIAS = "vault-example";
 const CHANGED_PATH = "notes/a.md";
 
-const serverDirectory = join(import.meta.dirname, "..", "..", "server");
+const serverDirectory =
+  process.env["WIP_RELAY_SOURCE"] ?? join(import.meta.dirname, "..", "..", "wip-relay");
 
 /** 本机有没有 Go 工具链。 */
 function hasGo(): boolean {
@@ -83,7 +84,7 @@ interface Device {
 
 /** 起一台设备：独立的插件目录与仓库，指向同一台中继。 */
 async function device(port: number, label: string, name: string): Promise<Device> {
-  const base = temporaryDir(`waystation-e2e-${name}-`);
+  const base = temporaryDir(`vault-wip-e2e-${name}-`);
   const files = pluginFiles(join(base, "plugin"));
   const vaultRoot = join(base, "vault");
   initRepository(vaultRoot);
@@ -104,7 +105,7 @@ async function device(port: number, label: string, name: string): Promise<Device
   return { engine, files };
 }
 
-describe.skipIf(!hasGo())("与真实中继的端到端", () => {
+describe.skipIf(!hasGo() || !existsSync(serverDirectory))("与真实中继的端到端", () => {
   let server: ChildProcess | null = null;
   let binary = "";
   let port = 0;
@@ -126,10 +127,10 @@ describe.skipIf(!hasGo())("与真实中继的端到端", () => {
   }
 
   beforeAll(async () => {
-    const base = temporaryDir("waystation-e2e-server-");
+    const base = temporaryDir("vault-wip-e2e-server-");
     dataDirectory = join(base, "data");
-    binary = join(temporaryDir("waystation-e2e-bin-"), "waystation");
-    execFileSync("go", ["build", "-o", binary, "./cmd/waystation"], {
+    binary = join(temporaryDir("vault-wip-e2e-bin-"), "wip-relay");
+    execFileSync("go", ["build", "-o", binary, "./cmd/wip-relay"], {
       cwd: serverDirectory,
       stdio: "inherit",
     });
@@ -139,7 +140,7 @@ describe.skipIf(!hasGo())("与真实中继的端到端", () => {
     writeFileSync(join(base, "relay.key"), certificate.key);
 
     port = await freePort();
-    configPath = join(base, "waystation.toml");
+    configPath = join(base, "wip-relay.toml");
     writeFileSync(
       configPath,
       [
