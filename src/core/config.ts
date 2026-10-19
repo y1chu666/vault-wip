@@ -40,6 +40,7 @@ const MAX_RELAYS = 8;
 const MAX_ALIAS_LENGTH = 64;
 const MAX_DEVICE_NAME_LENGTH = 64;
 const MAX_RELAY_NAME_LENGTH = 32;
+const MAX_REMOTE_NAME_LENGTH = 64;
 const MIN_INTERVAL_SECONDS = 5;
 const MAX_INTERVAL_SECONDS = 3600;
 
@@ -65,6 +66,12 @@ export interface CollectSettings {
   readonly idleIntervalSeconds: number;
   /** 是否识别冲突残留文件，用于把假冲突排除在提醒之外。 */
   readonly detectConflictFiles: boolean;
+}
+
+/** 远端查询的配置。 */
+export interface QuerySettings {
+  /** 要查询的远端名；留空表示用当前分支的上游。 */
+  readonly remote: string;
 }
 
 /** 界面配置。 */
@@ -99,6 +106,7 @@ export interface Config {
   readonly collect: CollectSettings;
   readonly notify: NotifySettings;
   readonly ui: UiSettings;
+  readonly query: QuerySettings;
   readonly relay: readonly RelaySettings[];
 }
 
@@ -129,7 +137,12 @@ export function parseConfig(text: string): Config {
   const raw = parseDocument(text);
 
   const problems: string[] = [];
-  checkKeys(raw, ["version", "device", "channel", "collect", "notify", "ui", "relay"], t("配置"), problems);
+  checkKeys(
+    raw,
+    ["version", "device", "channel", "collect", "notify", "ui", "query", "relay"],
+    t("配置"),
+    problems,
+  );
   const version = readInteger(raw, "version", t("配置"), problems);
   if (version !== undefined && version !== CONFIG_VERSION) {
     problems.push(t("配置版本为 {found}，本版本只认识 {known}", { found: version, known: CONFIG_VERSION }));
@@ -140,6 +153,7 @@ export function parseConfig(text: string): Config {
   const collect = parseCollect(raw["collect"], problems);
   const notify = parseNotify(raw["notify"], problems);
   const ui = parseUi(raw["ui"], problems);
+  const query = parseQuery(raw["query"], problems);
   const relay = parseRelays(raw["relay"], problems);
 
   if (problems.length > 0) {
@@ -153,6 +167,7 @@ export function parseConfig(text: string): Config {
     collect,
     notify,
     ui,
+    query,
     relay,
   };
 }
@@ -185,6 +200,9 @@ export function serializeConfig(config: Config): string {
     ui: {
       language: config.ui.language,
     },
+    query: {
+      remote: config.query.remote,
+    },
     relay: config.relay.map((relay) => ({
       name: relay.name,
       url: relay.url,
@@ -210,6 +228,7 @@ export function defaultConfig(alias: string): Config {
     },
     notify: { repeatSeconds: DEFAULT_REPEAT_SECONDS },
     ui: { language: "auto" },
+    query: { remote: "" },
     relay: [{ name: "example", url: "https://relay.example.com:8787", transport: "pinned" }],
   };
 }
@@ -258,6 +277,10 @@ repeat_seconds = ${DEFAULT_REPEAT_SECONDS}
 # ${t("界面语言，可取 {choices}。auto 表示跟随 Obsidian 的界面语言；", { choices: LANGUAGE_CHOICES.join(separator) })}
 # ${t("命令名只在插件重新加载之后才会跟着变。")}
 language = "auto"
+
+[query]
+# ${t("远端查询用的远端名，例如 origin；留空表示用当前分支的上游。")}
+remote = ""
 
 # ${t("中继可以有多个，重复写若干段 [[relay]] 即可。")}
 # ${t("transport 可取 {choices}；后两级的通信不加密或可被冒充，", { choices: TRANSPORT_LEVELS.join(separator) })}
@@ -408,6 +431,29 @@ function parseUi(value: unknown, problems: string[]): UiSettings {
     return fallback;
   }
   return { language };
+}
+
+function parseQuery(value: unknown, problems: string[]): QuerySettings {
+  const fallback: QuerySettings = { remote: "" };
+  if (value === undefined) {
+    return fallback;
+  }
+  if (!isTable(value)) {
+    problems.push(t("query 应当是一张表"));
+    return fallback;
+  }
+
+  checkKeys(value, ["remote"], "query", problems);
+  const remote = readString(value, "remote", "query", problems) ?? fallback.remote;
+  if (remote.length > MAX_REMOTE_NAME_LENGTH) {
+    problems.push(t("query.remote 最长 {limit} 个字符", { limit: MAX_REMOTE_NAME_LENGTH }));
+  } else if (containsControlCharacter(remote)) {
+    problems.push(t("query.remote 不能含有控制字符"));
+  } else if (remote.startsWith("-")) {
+    // 以短横线开头的名字会被 git 当成选项，而远端名只需是个名字。
+    problems.push(t("query.remote 不能以短横线开头"));
+  }
+  return { remote };
 }
 
 function parseRelays(value: unknown, problems: string[]): RelaySettings[] {

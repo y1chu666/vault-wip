@@ -1,4 +1,5 @@
-import { rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -832,3 +833,80 @@ describe("序号与回应上限", () => {
     expect(failure).toContain(wording);
   });
 });
+
+describe("远端查询", () => {
+  it("没有上游也没指定远端时说清无从比较", async () => {
+    const env = await fixture();
+
+    await env.engine.queryRemote();
+
+    const snapshot = env.snapshot();
+    expect(snapshot.remote).toEqual({ kind: "no-upstream" });
+    expect(snapshot.remoteQueriedAt).not.toBeNull();
+  });
+
+  it("查询不向中继发请求", async () => {
+    const env = await fixture();
+    const before = env.relay.requests.length;
+
+    await env.engine.queryRemote();
+
+    expect(env.relay.requests).toHaveLength(before);
+  });
+
+  it("指定远端之后能查出两边一致", async () => {
+    const env = await fixture({
+      configure: (config) => ({ ...config, query: { remote: "origin" } }),
+    });
+    // 拿一个裸仓库当远端，推一次之后两边就指向同一笔提交。
+    const bare = temporaryDir("waystation-remote-");
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", bare], { stdio: "ignore" });
+    execFileSync("git", ["remote", "add", "origin", bare], { cwd: env.vaultRoot, stdio: "ignore" });
+    execFileSync("git", ["push", "-q", "origin", "main"], { cwd: env.vaultRoot, stdio: "ignore" });
+
+    await env.engine.queryRemote();
+
+    expect(env.snapshot().remote).toEqual({ kind: "up-to-date", remote: "origin", branch: "main" });
+  });
+
+  it("远端多出的提交本机还没见过时如实说出", async () => {
+    const env = await pushFromAnotherDevice();
+
+    await env.engine.queryRemote();
+
+    expect(env.snapshot().remote).toEqual({ kind: "unfetched", remote: "origin", branch: "main" });
+  });
+
+  it("本机已见过远端那笔提交时数得出相距多远", async () => {
+    const env = await pushFromAnotherDevice();
+    // 拉取是使用者自己的动作，插件只查；这里替使用者拉一次，好让远端那笔提交落进本机。
+    execFileSync("git", ["fetch", "-q", "origin"], { cwd: env.vaultRoot, stdio: "ignore" });
+
+    await env.engine.queryRemote();
+
+    expect(env.snapshot().remote).toEqual({ kind: "behind", remote: "origin", branch: "main", behind: 1 });
+  });
+});
+
+/** 备好一个仓库、一个裸远端，并让另一台设备往远端推一笔本机还没有的提交。 */
+async function pushFromAnotherDevice(): Promise<Fixture> {
+  const env = await fixture({
+    configure: (config) => ({ ...config, query: { remote: "origin" } }),
+  });
+  const bare = temporaryDir("waystation-remote-");
+  execFileSync("git", ["init", "-q", "--bare", "-b", "main", bare], { stdio: "ignore" });
+  execFileSync("git", ["remote", "add", "origin", bare], { cwd: env.vaultRoot, stdio: "ignore" });
+  execFileSync("git", ["push", "-q", "origin", "main"], { cwd: env.vaultRoot, stdio: "ignore" });
+
+  const other = temporaryDir("waystation-other-");
+  execFileSync("git", ["clone", "-q", bare, other], { stdio: "ignore" });
+  writeFileSync(join(other, "notes", "b.md"), "另一台设备写的\n");
+  execFileSync("git", ["add", "-A"], { cwd: other, stdio: "ignore" });
+  execFileSync(
+    "git",
+    ["-c", "user.name=示例", "-c", "user.email=example@example.invalid", "commit", "-q", "-m", "对端的提交"],
+    { cwd: other, stdio: "ignore" },
+  );
+  execFileSync("git", ["push", "-q", "origin", "main"], { cwd: other, stdio: "ignore" });
+  return env;
+}

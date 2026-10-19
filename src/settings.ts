@@ -21,6 +21,7 @@ interface ConfigDraft {
   collect: Mutable<Config["collect"]>;
   notify: { repeatSeconds: number };
   ui: Mutable<Config["ui"]>;
+  query: Mutable<Config["query"]>;
   relay: Mutable<Config["relay"][number]>[];
 }
 
@@ -90,6 +91,7 @@ export class WaystationSettingTab extends PluginSettingTab {
     this.renderDevice(config);
     this.renderChannel(config);
     this.renderCollect(config);
+    this.renderQuery(config);
     this.renderNotify(config);
     this.renderRelays(config);
     this.renderRegistration(config);
@@ -217,6 +219,27 @@ export class WaystationSettingTab extends PluginSettingTab {
             draft.collect = { ...draft.collect, detectConflictFiles: value };
           });
         }),
+      );
+  }
+
+  /** 远端查询：只读远端，结果只留在本机界面上。 */
+  private renderQuery(config: Config): void {
+    new Setting(this.containerEl).setName(t("远端查询")).setHeading();
+
+    new Setting(this.containerEl)
+      .setName(t("查询用的远端"))
+      .setDesc(
+        t("填写要查询的远端名，例如 origin；留空表示用当前分支的上游。查询只向远端问一下两边各有哪些提交，既不拉取也不改动本机引用，结果只在本机界面上显示。"),
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder(t("例如：origin"))
+          .setValue(config.query.remote)
+          .onChange((value) => {
+            this.edit((draft) => {
+              draft.query = { remote: value.trim() };
+            });
+          }),
       );
   }
 

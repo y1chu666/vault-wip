@@ -460,6 +460,7 @@ function parseCount(value: string | undefined, sign: string): number {
   return Number.isSafeInteger(count) && count >= 0 ? count : 0;
 }
 
-function firstLine(text: string): string {
+/** 取输出里的第一行：把 git 的长篇 stderr 收成一句能放进提示的话。 */
+export function firstLine(text: string): string {
   return text.split("\n", 1)[0]?.trim() ?? "";
 }

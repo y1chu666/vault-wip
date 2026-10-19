@@ -7,6 +7,7 @@ import { ItemView, Notice, type WorkspaceLeaf } from "obsidian";
 import { displayName, type Conflict, type DeviceStatus } from "./core/state.js";
 import type { EngineSnapshot, RelayStatus } from "./core/engine.js";
 import { PLUGIN_NAME, t } from "./core/i18n.js";
+import { refName, remoteSummary } from "./core/remote.js";
 import type { StatusPayload } from "./core/payload.js";
 import type VaultWaystationPlugin from "./main.js";
 
@@ -194,10 +195,22 @@ export class WaystationView extends ItemView {
       }
     }
 
+    heading(pane, t("远端查询"));
+    const remote = snapshot.remote;
+    table(pane, [
+      [t("远端"), remote !== null && "remote" in remote ? refName(remote) : t("无")],
+      [t("上次查询"), clockText(snapshot.remoteQueriedAt)],
+    ]);
+    pane.createDiv({ text: remoteSummary(remote) });
+
     const actions = pane.createDiv({ cls: "waystation-actions" });
     const button = actions.createEl("button", { text: t("立即采集并上报") });
     button.onclick = () => {
       void this.plugin.reportNow();
+    };
+    const queryButton = actions.createEl("button", { text: t("查询远端") });
+    queryButton.onclick = () => {
+      void this.plugin.queryRemoteNow();
     };
   }
 

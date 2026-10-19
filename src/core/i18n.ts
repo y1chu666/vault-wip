@@ -530,6 +530,43 @@ export const ENGLISH = {
   "{where}.{key} 应当是整数": "{where}.{key} should be an integer",
   "{where}.{key} 应当是 true 或 false": "{where}.{key} should be true or false",
   "{where} 中不认识的配置项：{key}": "unknown setting in {where}: {key}",
+
+  // 配置：远端查询一项。
+  "远端查询用的远端名，例如 origin；留空表示用当前分支的上游。":
+    "Remote name to query, for example origin; leave empty to use the upstream of the current branch.",
+  "query 应当是一张表": "query should be a table",
+  "query.remote 最长 {limit} 个字符": "query.remote may be at most {limit} characters",
+  "query.remote 不能含有控制字符": "query.remote cannot hold control characters",
+  "query.remote 不能以短横线开头": "query.remote cannot start with a hyphen",
+
+  // 远端查询：结果与失败。
+  "远端名不合规：{remote}": "the remote name is not valid: {remote}",
+  "远端给出的提交标识不合规": "the commit id the remote gave is not valid",
+  "无法比较本地与远端": "this machine and the remote cannot be compared",
+  "尚未查询": "not queried yet",
+  "远端与本机一致": "the remote matches this machine",
+  "本机有 {count} 个提交尚未推上去": "this machine has {count} commits not pushed yet",
+  "远端有 {count} 个提交本机还没有": "the remote has {count} commits this machine does not have yet",
+  "本地与远端已经分开：远端有 {behind} 个本机没有，本机有 {ahead} 个尚未推上去":
+    "this machine and the remote have parted ways: the remote has {behind} this machine lacks, and this machine has {ahead} not pushed yet",
+  "远端分支指向本机还不认识的提交，可以先拉取一次":
+    "the remote branch points at a commit this machine does not know yet; pulling once will bring it over",
+  "远端上没有这个分支：{ref}": "the remote has no such branch: {ref}",
+  "当前不在任何分支上，无从比较远端":
+    "the repository is not on any branch, so there is nothing to compare with the remote",
+  "当前分支没有可查询的上游，请在设置里填写远端":
+    "the current branch has no upstream to query; fill in a remote in the settings",
+  "查询失败：{reason}": "the query failed: {reason}",
+
+  // 远端查询：视图与设置页。
+  "远端查询": "Remote query",
+  "远端": "Remote",
+  "上次查询": "Last query",
+  "查询远端": "Query the remote",
+  "查询用的远端": "Remote to query",
+  "填写要查询的远端名，例如 origin；留空表示用当前分支的上游。查询只向远端问一下两边各有哪些提交，既不拉取也不改动本机引用，结果只在本机界面上显示。":
+    "Fill in the remote name to query, for example origin; leave empty to use the upstream of the current branch. The query only asks the remote which commits each side has; it neither fetches nor changes any local reference, and the result is shown on this machine alone.",
+  "例如：origin": "for example: origin",
 } as const;
 
 /** 可用的文案键，即英文表里有的那些中文原句。 */

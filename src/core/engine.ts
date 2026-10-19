@@ -19,6 +19,7 @@ import {
 } from "./crypto.js";
 import { formatRfc3339, parseRfc3339, signRecord, verifyRecord } from "./envelope.js";
 import { t } from "./i18n.js";
+import { queryRemote as runRemoteQuery, remoteQueryDue, type RemoteQueryResult } from "./remote.js";
 import {
   CollectError,
   collectStatus,
@@ -132,6 +133,10 @@ export interface EngineSnapshot {
   readonly retired: boolean;
   /** 有中继处于降级传输。 */
   readonly degraded: boolean;
+  /** 最近一次远端查询的结果；尚未查过为 null。只在本机界面上显示。 */
+  readonly remote: RemoteQueryResult | null;
+  /** 最近一次远端查询的时刻。 */
+  readonly remoteQueriedAt: string | null;
   readonly diagnostics: Diagnostics;
 }
 
@@ -173,6 +178,8 @@ export class Engine {
   private events: string[] = [];
   private lastNote: string | null = null;
   private relayStatus = new Map<string, { lastSuccessAt: Date | null; lastFailure: string | null }>();
+  private remote: RemoteQueryResult | null = null;
+  private remoteQueriedAt: Date | null = null;
   private failureSince: number | null = null;
   private stopped = false;
 
@@ -259,6 +266,8 @@ export class Engine {
       contentKeyId: this.contentKey.id,
       retired: this.state.retired,
       degraded: this.clients.some((client) => client.degraded),
+      remote: this.remote,
+      remoteQueriedAt: this.remoteQueriedAt === null ? null : formatRfc3339(this.remoteQueriedAt),
       diagnostics: {
         collectedAt: this.collectedAt === null ? null : formatRfc3339(this.collectedAt),
         collectMillis: this.collectMillis,
@@ -283,6 +292,21 @@ export class Engine {
       return;
     }
     await this.runOnce();
+  }
+
+  /**
+   * 向远端查一次，结果只用于本机界面。
+   *
+   * 只读远端：既不拉取也不改动本机引用；失败也照实记下。这一项不进记录、不上报，
+   * 因此中继与对端都不知道本机查过谁、查出了什么。
+   */
+  async queryRemote(): Promise<void> {
+    if (this.stopped) {
+      return;
+    }
+    this.remote = await runRemoteQuery(this.runner, this.options.vaultRoot, this.config.query.remote);
+    this.remoteQueriedAt = this.now();
+    this.options.onChange?.();
   }
 
   /** 以注册凭证向各中继注册本仓库，成功的中继记下频道。 */
@@ -475,6 +499,10 @@ export class Engine {
 
     this.refreshConflicts();
     this.emitNotices();
+    // 远端查询排在最后：它只影响本机界面，不该拖慢上报，也不该参与冲突判断。
+    if (remoteQueryDue(this.remoteQueriedAt?.getTime() ?? null, this.now().getTime())) {
+      await this.queryRemote();
+    }
     this.options.onChange?.();
   }
 

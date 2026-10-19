@@ -354,3 +354,49 @@ describe("界面语言", () => {
     expect(templateConfig("vault-example")).toContain("[ui]");
   });
 });
+
+describe("远端查询设置", () => {
+  it("不写这一节时不去查任何远端", () => {
+    expect(parsed(minimal).query).toEqual({ remote: "" });
+  });
+
+  it("可以指定一个远端名", () => {
+    expect(parsed(`${channelBlock}[query]\nremote = "mirror"\n${relayBlock}`).query.remote).toBe("mirror");
+  });
+
+  it("拒绝过长的远端名", () => {
+    expect(failure(`${channelBlock}[query]\nremote = "${"r".repeat(65)}"\n${relayBlock}`)).toContain(
+      "query.remote 最长",
+    );
+  });
+
+  it("拒绝含控制字符的远端名", () => {
+    expect(failure(`${channelBlock}[query]\nremote = "a\\u0007b"\n${relayBlock}`)).toContain(
+      "query.remote 不能含有控制字符",
+    );
+  });
+
+  it("拒绝以短横线开头的远端名", () => {
+    expect(failure(`${channelBlock}[query]\nremote = "--upload-pack=x"\n${relayBlock}`)).toContain(
+      "query.remote 不能以短横线开头",
+    );
+  });
+
+  it("拒绝这一节里的多余键", () => {
+    expect(failure(`${channelBlock}[query]\nbranch = "main"\n${relayBlock}`)).toContain("不认识的配置项");
+  });
+
+  it("query 不是一张表时如实说出来", () => {
+    expect(failure(`query = 1\n${channelBlock}${relayBlock}`)).toContain("query 应当是一张表");
+  });
+
+  it("写回之后仍然认得出这一项", () => {
+    const before = defaultConfig("vault-example");
+    const withRemote: Config = { ...before, query: { remote: "mirror" } };
+    expect(parsed(serializeConfig(withRemote)).query.remote).toBe("mirror");
+  });
+
+  it("首次生成的配置里带上这一项", () => {
+    expect(templateConfig("vault-example")).toContain("[query]");
+  });
+});

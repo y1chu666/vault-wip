@@ -309,6 +309,16 @@ export default class VaultWaystationPlugin extends Plugin {
     await this.tick("timer");
   }
 
+  /** 手工查一次远端；结果只在本机界面上显示。 */
+  async queryRemoteNow(): Promise<void> {
+    const engine = this.engine;
+    if (engine === null) {
+      return;
+    }
+    await engine.queryRemote();
+    this.refresh();
+  }
+
   /** 打开或聚焦状态视图。 */
   async activateView(): Promise<void> {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
