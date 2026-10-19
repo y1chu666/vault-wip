@@ -6,6 +6,7 @@
 import { execFile } from "node:child_process";
 
 import { decodeText, decodePaths } from "./text.js";
+import { t } from "./i18n.js";
 
 /** 一次外部命令的结果。 */
 export interface CommandResult {
@@ -163,13 +164,17 @@ export function createCommandRunner(gitPath: string, timeoutMs = COLLECT_TIMEOUT
           }
           if (error.killed === true) {
             reject(
-              new CollectError(`git 未在 ${String(Math.max(1, Math.round(timeoutMs / 1000)))} 秒内返回，本次采集放弃`),
+              new CollectError(
+                t("git 未在 {seconds} 秒内返回，本次采集放弃", {
+                  seconds: Math.max(1, Math.round(timeoutMs / 1000)),
+                }),
+              ),
             );
             return;
           }
           if (typeof error.code === "string") {
             // 进程根本起不来时错误码是字符串，例如可执行文件不存在。
-            reject(new CollectError(`无法执行 ${executable}：${error.message}`));
+            reject(new CollectError(t("无法执行 {executable}：{reason}", { executable, reason: error.message })));
             return;
           }
           // 非零退出码交给调用方判断：不同子命令下它的含义不同。
@@ -183,7 +188,7 @@ export function createCommandRunner(gitPath: string, timeoutMs = COLLECT_TIMEOUT
 export async function gitVersion(runner: CommandRunner, cwd: string): Promise<string> {
   const result = await runner(["--version"], cwd);
   if (result.code !== 0) {
-    throw new CollectError("git 不可用，请检查 git 可执行文件路径设置");
+    throw new CollectError(t("git 不可用，请检查 git 可执行文件路径设置"));
   }
   return decodeText(result.stdout).trim();
 }
@@ -199,7 +204,7 @@ export async function collectStatus(runner: CommandRunner, cwd: string): Promise
 
   const statusResult = await runner([...safe, "status", "--porcelain=v2", "-z", "--branch"], cwd);
   if (statusResult.code !== 0) {
-    throw new CollectError(`读取仓库状态失败：${firstLine(statusResult.stderr)}`);
+    throw new CollectError(t("读取仓库状态失败：{detail}", { detail: firstLine(statusResult.stderr) }));
   }
 
   const parsed = parseStatusOutput(statusResult.stdout);

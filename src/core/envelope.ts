@@ -5,6 +5,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import { verifySignature, type DeviceKey } from "./identity.js";
+import { t } from "./i18n.js";
 
 /** 允许的时钟偏差（秒），超出即拒绝，以免陈旧请求被重放。 */
 export const CLOCK_SKEW_SECONDS = 60;
@@ -129,7 +130,7 @@ export function verifyRecord(
  */
 export function formatRfc3339(moment: Date): string {
   if (Number.isNaN(moment.getTime())) {
-    throw new Error("时间无效");
+    throw new Error(t("时间无效"));
   }
   return `${moment.toISOString().slice(0, 19)}Z`;
 }
@@ -138,11 +139,11 @@ export function formatRfc3339(moment: Date): string {
 export function parseRfc3339(text: string): Date {
   const pattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
   if (!pattern.test(text)) {
-    throw new Error(`时间文本不符合 RFC 3339：${text}`);
+    throw new Error(t("时间文本不符合 RFC 3339：{text}", { text }));
   }
   const moment = new Date(text);
   if (Number.isNaN(moment.getTime())) {
-    throw new Error(`时间文本不符合 RFC 3339：${text}`);
+    throw new Error(t("时间文本不符合 RFC 3339：{text}", { text }));
   }
   return moment;
 }

@@ -12,6 +12,7 @@ import { request as httpsRequest } from "node:https";
 import type { IncomingMessage } from "node:http";
 import type { RequestOptions } from "node:https";
 import type { TLSSocket } from "node:tls";
+import { t } from "./i18n.js";
 
 import type { TransportLevel } from "./config.js";
 
@@ -62,18 +63,18 @@ export class TransportError extends Error {
 export async function send(request: TransportRequest): Promise<TransportResponse> {
   const url = new URL(request.url);
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new TransportError("protocol", `地址的协议只能是 http 或 https：${request.url}`);
+    throw new TransportError("protocol", t("地址的协议只能是 http 或 https：{url}", { url: request.url }));
   }
 
   const secured = url.protocol === "https:";
   if (request.level === "plaintext" && secured) {
-    throw new TransportError("protocol", "配置为明文传输，地址却是 https");
+    throw new TransportError("protocol", t("配置为明文传输，地址却是 https"));
   }
   if (request.level !== "plaintext" && !secured) {
-    throw new TransportError("protocol", "配置要求加密传输，地址却是 http");
+    throw new TransportError("protocol", t("配置要求加密传输，地址却是 http"));
   }
   if (request.spki !== null && !secured) {
-    throw new TransportError("protocol", "明文传输没有证书可钉");
+    throw new TransportError("protocol", t("明文传输没有证书可钉"));
   }
 
   const body = Buffer.from(request.body);
@@ -100,7 +101,7 @@ export async function send(request: TransportRequest): Promise<TransportResponse
       reject(classify(error));
     });
     outgoing.on("timeout", () => {
-      outgoing.destroy(new TransportError("timeout", "等待中继回应超时"));
+      outgoing.destroy(new TransportError("timeout", t("等待中继回应超时")));
     });
 
     if (secured) {
@@ -113,18 +114,18 @@ export async function send(request: TransportRequest): Promise<TransportResponse
             const certificate = tls.getPeerCertificate(true);
             if (certificate.raw === undefined) {
               if (request.level === "pinned") {
-                outgoing.destroy(new TransportError("certificate", "对方没有给出证书"));
+                outgoing.destroy(new TransportError("certificate", t("对方没有给出证书")));
               }
               return;
             }
             observed = spkiFingerprint(certificate.raw);
             if (request.level === "pinned" && request.spki !== null && observed !== request.spki) {
               outgoing.destroy(
-                new TransportError("certificate", `中继证书的公钥指纹与钉住的值不同：${observed}`),
+                new TransportError("certificate", t("中继证书的公钥指纹与钉住的值不同：{observed}", { observed })),
               );
             }
           } catch (error) {
-            outgoing.destroy(new TransportError("certificate", `核对中继证书时出错：${messageOf(error)}`));
+            outgoing.destroy(new TransportError("certificate", t("核对中继证书时出错：{reason}", { reason: messageOf(error) })));
           }
         });
       });
@@ -147,7 +148,7 @@ function collect(
   response.on("data", (chunk: Buffer) => {
     length += chunk.length;
     if (length > MAX_RESPONSE_BYTES) {
-      response.destroy(new TransportError("protocol", "中继的回应超过上限"));
+      response.destroy(new TransportError("protocol", t("中继的回应超过上限")));
       return;
     }
     chunks.push(chunk);
@@ -184,7 +185,7 @@ function classify(error: unknown): TransportError {
   }
   const code = (error as { code?: unknown }).code;
   if (typeof code === "string" && (CERTIFICATE_CODES.has(code) || code.startsWith("ERR_TLS_CERT"))) {
-    return new TransportError("certificate", `证书校验未通过（${code}）`);
+    return new TransportError("certificate", t("证书校验未通过（{code}）", { code }));
   }
   return new TransportError("network", messageOf(error));
 }

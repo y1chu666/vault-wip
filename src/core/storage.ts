@@ -11,6 +11,7 @@ import type { ContentKey } from "./crypto.js";
 import { DeviceKey } from "./identity.js";
 import type { DeviceStatus } from "./state.js";
 import { decodeText, encodeText } from "./text.js";
+import { t } from "./i18n.js";
 
 /** 状态缓存的格式版本。 */
 export const STATE_VERSION = 1;
@@ -72,13 +73,13 @@ export async function readTextFile(path: string): Promise<string | null> {
     if (isNotFound(error)) {
       return null;
     }
-    throw new StorageError(`读取 ${path} 失败：${messageOf(error)}`);
+    throw new StorageError(t("读取 {path} 失败：{reason}", { path, reason: messageOf(error) }));
   }
 
   try {
     return decodeText(bytes);
   } catch {
-    throw new StorageError(`${path} 不是 UTF-8 文本`);
+    throw new StorageError(t("{path} 不是 UTF-8 文本", { path }));
   }
 }
 
@@ -98,7 +99,7 @@ export async function writeTextFile(path: string, text: string, mode?: number): 
     }
     await rename(temporary, path);
   } catch (error) {
-    throw new StorageError(`写入 ${path} 失败：${messageOf(error)}`);
+    throw new StorageError(t("写入 {path} 失败：{reason}", { path, reason: messageOf(error) }));
   }
 }
 
@@ -109,7 +110,7 @@ export async function writeTextFile(path: string, text: string, mode?: number): 
  * 那些规则属于他们自己。
  */
 export async function ensureSecretIgnore(path: string, names: readonly string[]): Promise<void> {
-  const existing = (await readTextFile(path)) ?? "# 本目录由 Vault Waystation 使用；以下文件含密钥，不要纳入版本控制。\n";
+  const existing = (await readTextFile(path)) ?? `${t("# 本目录由 Vault Waystation 使用；以下文件含密钥，不要纳入版本控制。")}\n`;
   const missing = names.filter((name) => !existing.split(/\r?\n/).includes(name));
   if (missing.length === 0) {
     return;
@@ -125,7 +126,7 @@ export async function loadOrCreateDeviceKey(files: PluginFiles): Promise<{ key: 
     try {
       return { key: DeviceKey.fromSeedText(text.trim()), created: false };
     } catch (error) {
-      throw new StorageError(`设备私钥不可用：${messageOf(error)}`);
+      throw new StorageError(t("设备私钥不可用：{reason}", { reason: messageOf(error) }));
     }
   }
 
@@ -141,7 +142,7 @@ export async function loadOrCreateContentKey(files: PluginFiles): Promise<{ key:
     try {
       return { key: decodeContentKey(text), created: false };
     } catch (error) {
-      throw new StorageError(`内容密钥不可用：${messageOf(error)}`);
+      throw new StorageError(t("内容密钥不可用：{reason}", { reason: messageOf(error) }));
     }
   }
 
@@ -171,22 +172,22 @@ export async function loadRelayPins(path: string): Promise<Map<string, RelayPin>
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new StorageError(`${path} 不是合法的 JSON，请删掉它重新配对`);
+    throw new StorageError(t("{path} 不是合法的 JSON，请删掉它重新配对", { path }));
   }
   if (!isTable(raw)) {
-    throw new StorageError(`${path} 的内容不是一张表，请删掉它重新配对`);
+    throw new StorageError(t("{path} 的内容不是一张表，请删掉它重新配对", { path }));
   }
 
   const pins = new Map<string, RelayPin>();
   for (const [name, value] of Object.entries(raw)) {
     if (!isTable(value)) {
-      throw new StorageError(`${path} 中 ${name} 一项的内容不合规，请删掉它重新配对`);
+      throw new StorageError(t("{path} 中 {name} 一项的内容不合规，请删掉它重新配对", { path, name }));
     }
     const serverFingerprint = value["serverFingerprint"];
     const serverPublicKey = value["serverPublicKey"];
     const spki = value["spki"];
     if (typeof serverFingerprint !== "string" || typeof serverPublicKey !== "string" || typeof spki !== "string") {
-      throw new StorageError(`${path} 中 ${name} 一项的内容不合规，请删掉它重新配对`);
+      throw new StorageError(t("{path} 中 {name} 一项的内容不合规，请删掉它重新配对", { path, name }));
     }
     pins.set(name, { serverFingerprint, serverPublicKey, spki });
   }
@@ -297,7 +298,7 @@ export async function fileExists(path: string): Promise<boolean> {
     if (isNotFound(error)) {
       return false;
     }
-    throw new StorageError(`查看 ${path} 失败：${messageOf(error)}`);
+    throw new StorageError(t("查看 {path} 失败：{reason}", { path, reason: messageOf(error) }));
   }
 }
 

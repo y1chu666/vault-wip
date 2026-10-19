@@ -5,6 +5,7 @@
 // 落盘与上报由调用方按自己的节奏进行。
 import { digestHex } from "./envelope.js";
 import type { StatusPayload } from "./payload.js";
+import { t } from "./i18n.js";
 
 /** 一台设备的已知状态。 */
 export interface DeviceStatus {
@@ -54,7 +55,7 @@ export interface ConflictPeer {
 
 /** 默认称呼：设备没有留下名称时用指纹的前几位代指，免得界面上只剩空白。 */
 export function displayName(peer: DeviceStatus): string {
-  return peer.label === "" ? `设备 ${peer.fingerprint.slice(0, 8)}` : peer.label;
+  return peer.label === "" ? t("设备 {fingerprint}", { fingerprint: peer.fingerprint.slice(0, 8) }) : peer.label;
 }
 
 /** 下一次上报应当使用的序号。 */

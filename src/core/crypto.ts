@@ -11,6 +11,7 @@ import {
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
+import { t } from "./i18n.js";
 
 /** 内容密钥的字节数。 */
 export const CONTENT_KEY_BYTES = 32;
@@ -82,7 +83,12 @@ export function generateContentKey(): ContentKey {
 /** 由三十二字节构造内容密钥。 */
 export function contentKeyFromBytes(bytes: Uint8Array): ContentKey {
   if (bytes.length !== CONTENT_KEY_BYTES) {
-    throw new ContentCryptoError(`内容密钥应为 ${CONTENT_KEY_BYTES} 字节，实际为 ${bytes.length} 字节`);
+    throw new ContentCryptoError(
+      t("内容密钥应为 {expected} 字节，实际为 {actual} 字节", {
+        expected: CONTENT_KEY_BYTES,
+        actual: bytes.length,
+      }),
+    );
   }
   const buffer = Buffer.from(bytes);
   return {
@@ -104,16 +110,21 @@ export function encodeContentKey(key: ContentKey): string {
 export function decodeContentKey(text: string): ContentKey {
   const trimmed = text.trim();
   if (!trimmed.startsWith(KEY_STRING_PREFIX)) {
-    throw new ContentCryptoError("密钥串缺少前缀，可能不是本插件的密钥");
+    throw new ContentCryptoError(t("密钥串缺少前缀，可能不是本插件的密钥"));
   }
   const body = trimmed.slice(KEY_STRING_PREFIX.length);
   if (!/^[A-Za-z0-9_-]+$/.test(body)) {
-    throw new ContentCryptoError("密钥串含有不合规的字符");
+    throw new ContentCryptoError(t("密钥串含有不合规的字符"));
   }
 
   const bytes = Buffer.from(body, "base64url");
   if (bytes.length !== CONTENT_KEY_BYTES) {
-    throw new ContentCryptoError(`密钥串解出的长度为 ${bytes.length} 字节，期望 ${CONTENT_KEY_BYTES} 字节`);
+    throw new ContentCryptoError(
+      t("密钥串解出的长度为 {actual} 字节，期望 {expected} 字节", {
+        actual: bytes.length,
+        expected: CONTENT_KEY_BYTES,
+      }),
+    );
   }
   return contentKeyFromBytes(bytes);
 }
@@ -150,17 +161,20 @@ export function unprotectContentKey(text: string, passphrase: string): ContentKe
 
   const trimmed = text.trim();
   if (!trimmed.startsWith(PROTECTED_PREFIX)) {
-    throw new ContentCryptoError("这段文本不是本插件导出的口令文件");
+    throw new ContentCryptoError(t("这段文本不是本插件导出的口令文件"));
   }
 
   const payload = Buffer.from(trimmed.slice(PROTECTED_PREFIX.length), "base64url");
   const header = 4 + SALT_BYTES + NONCE_BYTES;
   if (payload.length < header + CONTENT_KEY_BYTES + TAG_BYTES) {
-    throw new ContentCryptoError("口令文件过短，可能已损坏");
+    throw new ContentCryptoError(t("口令文件过短，可能已损坏"));
   }
   if (payload[0] !== PROTECTED_VERSION) {
     throw new ContentCryptoError(
-      `口令文件的版本为 ${String(payload[0])}，本版本只认识 ${String(PROTECTED_VERSION)}`,
+      t("口令文件的版本为 {found}，本版本只认识 {known}", {
+        found: String(payload[0]),
+        known: PROTECTED_VERSION,
+      }),
     );
   }
 
@@ -168,7 +182,7 @@ export function unprotectContentKey(text: string, passphrase: string): ContentKe
   const r = payload[2] ?? 0;
   const p = payload[3] ?? 0;
   if (nLog2 > MAX_SCRYPT_N_LOG2 || r > MAX_SCRYPT_R || p > MAX_SCRYPT_P) {
-    throw new ContentCryptoError("口令文件的代价参数超出允许范围");
+    throw new ContentCryptoError(t("口令文件的代价参数超出允许范围"));
   }
 
   const salt = payload.subarray(4, 4 + SALT_BYTES);
@@ -183,7 +197,7 @@ export function unprotectContentKey(text: string, passphrase: string): ContentKe
   try {
     plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   } catch {
-    throw new ContentCryptoError("口令不对，或文件已被改动");
+    throw new ContentCryptoError(t("口令不对，或文件已被改动"));
   }
   return contentKeyFromBytes(new Uint8Array(plaintext));
 }
@@ -199,17 +213,21 @@ function deriveKey(passphrase: string, salt: Uint8Array, nLog2: number, r: numbe
       maxmem: 256 * 1024 * 1024,
     });
   } catch (error) {
-    throw new ContentCryptoError(`口令派生失败：${error instanceof Error ? error.message : String(error)}`);
+    throw new ContentCryptoError(
+      t("口令派生失败：{reason}", {
+        reason: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 }
 
 /** 口令长度与字符范围都做限制：过长只会拖慢派生，空口令则毫无意义。 */
 function checkPassphrase(passphrase: string): void {
   if (passphrase.length === 0) {
-    throw new ContentCryptoError("口令不能为空");
+    throw new ContentCryptoError(t("口令不能为空"));
   }
   if (passphrase.length > MAX_PASSPHRASE_LENGTH) {
-    throw new ContentCryptoError(`口令最长 ${MAX_PASSPHRASE_LENGTH} 个字符`);
+    throw new ContentCryptoError(t("口令最长 {limit} 个字符", { limit: MAX_PASSPHRASE_LENGTH }));
   }
 }
 
@@ -241,15 +259,17 @@ export function decryptContent(key: ContentKey, envelope: Uint8Array): Uint8Arra
   const header = 1 + KEY_ID_BYTES + NONCE_BYTES;
 
   if (bytes.length < header + TAG_BYTES) {
-    throw new ContentCryptoError("密文过短，无法解出");
+    throw new ContentCryptoError(t("密文过短，无法解出"));
   }
   if (bytes[0] !== ENVELOPE_VERSION) {
-    throw new ContentCryptoError(`密文版本为 ${String(bytes[0])}，本版本只认识 ${ENVELOPE_VERSION}`);
+    throw new ContentCryptoError(
+      t("密文版本为 {found}，本版本只认识 {known}", { found: String(bytes[0]), known: ENVELOPE_VERSION }),
+    );
   }
 
   const keyId = bytes.subarray(1, 1 + KEY_ID_BYTES).toString("hex");
   if (!constantTimeEquals(keyId, key.id)) {
-    throw new ContentCryptoError("密文所用的密钥与当前密钥不同");
+    throw new ContentCryptoError(t("密文所用的密钥与当前密钥不同"));
   }
 
   const nonce = bytes.subarray(header - NONCE_BYTES, header);
@@ -262,7 +282,7 @@ export function decryptContent(key: ContentKey, envelope: Uint8Array): Uint8Arra
     return new Uint8Array(Buffer.concat([decipher.update(ciphertext), decipher.final()]));
   } catch {
     // 具体原因（标签不符、密文被改动）对使用者没有区别，都归为「解不开」。
-    throw new ContentCryptoError("密文校验未通过，内容可能已被改动");
+    throw new ContentCryptoError(t("密文校验未通过，内容可能已被改动"));
   }
 }
 

@@ -260,6 +260,276 @@ export const ENGLISH = {
   "跟随 Obsidian": "follow Obsidian",
   "中文": "Chinese",
   "英文": "English",
+
+  // 核心：身份、信封与状态。
+  "设备 {fingerprint}": "device {fingerprint}",
+  "时间无效": "the time is not valid",
+  "时间文本不符合 RFC 3339：{text}": "the time text does not follow RFC 3339: {text}",
+  "种子应为 {expected} 字节，实际为 {actual} 字节":
+    "the seed should be {expected} bytes but is {actual} bytes",
+  "私钥应为 {length} 位小写十六进制": "the private key should be {length} lowercase hexadecimal digits",
+  "私钥不是 Ed25519 的 PKCS#8 编码": "the private key is not PKCS#8 encoded Ed25519",
+  "公钥应为 {expected} 字节，实际为 {actual} 字节":
+    "the public key should be {expected} bytes but is {actual} bytes",
+  "指纹应为 {length} 位小写十六进制": "the fingerprint should be {length} lowercase hexadecimal digits",
+
+  // 核心：采集仓库状态。
+  "git 未在 {seconds} 秒内返回，本次采集放弃":
+    "git did not return within {seconds} seconds; this collection is abandoned",
+  "无法执行 {executable}：{reason}": "cannot run {executable}: {reason}",
+  "git 不可用，请检查 git 可执行文件路径设置":
+    "git is not available; check the git executable path in the settings",
+  "读取仓库状态失败：{detail}": "reading the repository status failed: {detail}",
+
+  // 核心：传输。
+  "地址的协议只能是 http 或 https：{url}": "the address scheme must be http or https: {url}",
+  "配置为明文传输，地址却是 https": "the settings ask for plaintext but the address is https",
+  "配置要求加密传输，地址却是 http": "the settings require an encrypted transport but the address is http",
+  "明文传输没有证书可钉": "plaintext transport has no certificate to pin",
+  "等待中继回应超时": "timed out waiting for the relay to answer",
+  "对方没有给出证书": "the other side gave no certificate",
+  "中继证书的公钥指纹与钉住的值不同：{observed}":
+    "the relay certificate's public key fingerprint differs from the pinned value: {observed}",
+  "核对中继证书时出错：{reason}": "checking the relay certificate failed: {reason}",
+  "中继的回应超过上限": "the relay's response is over the limit",
+  "证书校验未通过（{code}）": "certificate verification failed ({code})",
+
+  // 核心：本机文件。
+  "读取 {path} 失败：{reason}": "reading {path} failed: {reason}",
+  "查看 {path} 失败：{reason}": "inspecting {path} failed: {reason}",
+  "写入 {path} 失败：{reason}": "writing {path} failed: {reason}",
+  "{path} 不是 UTF-8 文本": "{path} is not UTF-8 text",
+  "# 本目录由 Vault Waystation 使用；以下文件含密钥，不要纳入版本控制。":
+    "# This folder is used by Vault Waystation; the files listed below hold keys, so do not put them under version control.",
+  "设备私钥不可用：{reason}": "the device private key is unusable: {reason}",
+  "内容密钥不可用：{reason}": "the content key is unusable: {reason}",
+  "{path} 不是合法的 JSON，请删掉它重新配对": "{path} is not valid JSON; delete it and pair again",
+  "{path} 的内容不是一张表，请删掉它重新配对":
+    "the contents of {path} are not a table; delete it and pair again",
+  "{path} 中 {name} 一项的内容不合规，请删掉它重新配对":
+    "the {name} entry in {path} is not valid; delete it and pair again",
+
+  // 核心：记录内容。
+  "记录内容不是合法的 JSON": "the record contents are not valid JSON",
+  "记录内容应当是一个对象": "the record contents should be an object",
+  "记录内容中不认识的字段：{field}": "unknown field in the record contents: {field}",
+  "记录内容中的设备名称不合规": "the device name in the record contents is not valid",
+  "记录内容中的改动文件数不合规": "the changed file count in the record contents is not valid",
+  "记录内容中的截断标记不合规": "the truncation flag in the record contents is not valid",
+  "记录内容中的改动文件数小于清单长度":
+    "the changed file count in the record contents is smaller than the list",
+  "记录内容中的 {field} 应当是数组": "{field} in the record contents should be an array",
+  "记录内容中的 {field} 超过 {limit} 条": "{field} in the record contents has more than {limit} entries",
+  "记录内容中的 {field} 含有非字符串条目":
+    "{field} in the record contents holds an entry that is not a string",
+  "记录内容中的 {field} 含有不合规的路径": "{field} in the record contents holds a path that is not valid",
+
+  // 核心：内容密钥与密文。
+  "内容密钥应为 {expected} 字节，实际为 {actual} 字节":
+    "the content key should be {expected} bytes but is {actual} bytes",
+  "密钥串缺少前缀，可能不是本插件的密钥":
+    "the key string has no prefix, so it is probably not a key from this plugin",
+  "密钥串含有不合规的字符": "the key string holds characters that are not allowed",
+  "密钥串解出的长度为 {actual} 字节，期望 {expected} 字节":
+    "the key string decodes to {actual} bytes but {expected} bytes were expected",
+  "这段文本不是本插件导出的口令文件": "this text is not a passphrase file exported by this plugin",
+  "口令文件过短，可能已损坏": "the passphrase file is too short and may be damaged",
+  "口令文件的版本为 {found}，本版本只认识 {known}":
+    "the passphrase file is version {found}, but this version only knows {known}",
+  "口令文件的代价参数超出允许范围": "the cost parameter of the passphrase file is out of range",
+  "口令不对，或文件已被改动": "the passphrase is wrong, or the file has been changed",
+  "口令派生失败：{reason}": "deriving from the passphrase failed: {reason}",
+  "口令不能为空": "the passphrase cannot be empty",
+  "口令最长 {limit} 个字符": "the passphrase may be at most {limit} characters",
+  "密文过短，无法解出": "the ciphertext is too short to decrypt",
+  "密文版本为 {found}，本版本只认识 {known}":
+    "the ciphertext is version {found}, but this version only knows {known}",
+  "密文所用的密钥与当前密钥不同": "the ciphertext was made with a different key than the current one",
+  "密文校验未通过，内容可能已被改动":
+    "the ciphertext does not pass verification; the contents may have been changed",
+
+  // 核心：编排与诊断。
+  "已在中继 {relay} 注册频道 {channel}": "registered channel {channel} on relay {relay}",
+  "注册未全部完成：{failures}": "registration did not complete everywhere: {failures}",
+  "尚未在任何中继上注册，无法吊销设备": "no relay has this vault registered yet, so no device can be revoked",
+  "已在中继 {relay} 吊销设备 {fingerprint}": "revoked device {fingerprint} on relay {relay}",
+  "吊销未全部完成：{failures}": "revocation did not complete everywhere: {failures}",
+  "已在中继 {relay} 退役本设备": "retired this device on relay {relay}",
+  "退役未全部完成：{failures}": "retirement did not complete everywhere: {failures}",
+  "本机计数已重置为 0，下一次上报将按中继给出的序号重新对齐":
+    "the local counter has been reset to 0; the next report aligns again with the sequence a relay gives",
+  "已换用新的内容密钥，此前用旧密钥加密的对端记录读不出来":
+    "switched to the new content key; records from other devices encrypted with the old key can no longer be read",
+  "采集失败：{reason}": "collection failed: {reason}",
+  "上报失败：{reason}": "reporting failed: {reason}",
+  "中继上已有本设备的记录（序号 {sequence}），按它推进后重报":
+    "the relay already has a record for this device (sequence {sequence}); advancing to it and reporting again",
+  "按中继给出的序号重报之后仍被拒：同一份身份可能被复制到了另一台设备上，或本机计数已不可用；请在诊断栏核对状态":
+    "the report was rejected again after advancing to the sequence a relay gave: the same identity may have been copied to another device, or the local counter is no longer usable; check the state in the diagnostics pane",
+  "本机计数已达可表示上界（{limit}），本次不上报：请在诊断栏核对状态后重置本机计数":
+    "the local counter has reached the representable ceiling ({limit}); nothing is reported this time: check the state in the diagnostics pane and then reset the local counter",
+  "中继 {relay}：尚未注册本仓库，请先填写注册凭证并注册":
+    "relay {relay}: this vault is not registered yet; fill in the registration credential and register first",
+  "中继 {relay} 给出的本设备既有序号已达可表示上界，不予采信：请在诊断栏核对状态":
+    "the existing sequence relay {relay} gives for this device has reached the representable ceiling, so it is not taken: check the state in the diagnostics pane",
+  "中继 {relay} 回送的内容里有 {count} 条读不出来，已放弃：{detail}":
+    "{count} entries relay {relay} sent back cannot be read and have been dropped: {detail}",
+  "中继 {relay} 回送的记录已达上限，本次只取回一部分，其余下一轮再取":
+    "the records relay {relay} sent back have reached the limit; only part is taken this time, the rest next round",
+  "记录签名核不过，内容可能已被改动":
+    "the record signature does not check out; the contents may have been changed",
+  "从 {relay} 取回 {count} 台设备的状态": "took the status of {count} devices from {relay}",
+  "设备 {fingerprint} 在序号 {incoming} 上给出了两份内容，已保留先前那份":
+    "device {fingerprint} gave two different contents for sequence {incoming}; the earlier one is kept",
+  "设备 {fingerprint} 已被吊销，此后不再参与判断":
+    "device {fingerprint} has been revoked and no longer takes part in the check",
+  "原因不明": "reason unknown",
+  "与中继 {relay} 的联系已恢复": "connection to relay {relay} has recovered",
+  "与中继 {relay} 通信失败：{reason}": "communication with relay {relay} failed: {reason}",
+  "舍弃设备 {fingerprint} 的记录：{reason}": "discarding the record of device {fingerprint}: {reason}",
+  "{message}（中继说明：{detail}）": "{message} (the relay says: {detail})",
+
+  // 中继通信。
+  "频道别名": "channel alias",
+  "本设备的记录": "the record of this device",
+  "被吊销的设备指纹": "the fingerprint of the revoked device",
+  "退役的设备指纹": "the fingerprint of the retired device",
+  "记录中的公钥": "the public key in the record",
+  "记录中的设备指纹": "the device fingerprint in the record",
+  "记录中的采集时间": "the collection time in the record",
+  "记录内容": "the record contents",
+  "记录签名": "the record signature",
+  "一条对端记录": "one peer record",
+  "一条吊销纪录": "one revocation entry",
+  "吊销记录中的设备指纹": "the device fingerprint in the revocation entry",
+  "吊销记录中的发起设备": "the originating device in the revocation entry",
+  "吊销记录中的时间": "the time in the revocation entry",
+  "中继 {relay}": "relay {relay}",
+  "中继的回应里缺少{what}": "the relay's response is missing {what}",
+  "中继给出的{what}是空的": "the {what} the relay gave is empty",
+  "中继的回应里没有说明上报是否被接受":
+    "the relay's response does not say whether the report was accepted",
+  "{relay}：回应的正文不是合法的 JSON": "{relay}: the response body is not valid JSON",
+  "{relay}：回应的正文不是一个对象": "{relay}: the response body is not an object",
+  "{relay}：回应没有签名": "{relay}: the response carries no signature",
+  "{relay}：回应签名的编码不合规": "{relay}: the response signature is not encoded properly",
+  "{relay}：回应里的公钥或指纹不合规": "{relay}: the public key or fingerprint in the response is not valid",
+  "{relay}：回应里的公钥与指纹不符":
+    "{relay}: the public key in the response does not match its fingerprint",
+  "{relay}：中继的公钥指纹与钉住的值不同，已停止通信，请重新核对后再配对":
+    "{relay}: the relay's public key fingerprint differs from the pinned value, so communication has stopped; check it again before pairing",
+  "{relay}：回应的签名核不过，可能有人在中间改动":
+    "{relay}: the response signature does not check out; someone may be tampering in between",
+  "{relay}：当前传输级别属于降级，不允许执行注册":
+    "{relay}: the current transport level is degraded, so registration is not allowed",
+  "{relay}：当前传输级别属于降级，不允许执行吊销":
+    "{relay}: the current transport level is degraded, so revocation is not allowed",
+  "{relay}：当前传输级别属于降级，不允许执行退役":
+    "{relay}: the current transport level is degraded, so retirement is not allowed",
+  "{relay}：通信结束却没有记下中继公钥":
+    "{relay}: communication ended without recording the relay public key",
+  "{relay}：{wording}": "{relay}: {wording}",
+  "中继拒绝了这次请求（{code}）": "the relay rejected this request ({code})",
+  "未给出代码": "no code given",
+  "中继认为请求不合规": "the relay considers the request invalid",
+  "中继没有通过本设备的签名校验": "the relay did not accept this device's signature",
+  "本设备未注册，或已被吊销": "this device is not registered, or has been revoked",
+  "中继不允许这次操作": "the relay does not allow this operation",
+  "中继认为这是一次重放，可能是时钟偏差或重复发送":
+    "the relay takes this for a replay; the clock may be off or the request was sent twice",
+  "本机与中继的时间相差过大，请校正时间":
+    "the clock here and on the relay differ too much; correct the time",
+  "中继上找不到对应的频道或记录": "the relay has no such channel or record",
+  "与中继上的既有状态冲突": "this conflicts with the state already on the relay",
+  "请求过于频繁，或超出中继的上限": "too many requests, or over a limit on the relay",
+  "中继内部出错": "the relay had an internal error",
+  "中继给出的记录不是一个对象": "the record the relay gave is not an object",
+  "中继给出的记录序号不合规": "the record sequence the relay gave is not valid",
+  "中继给出的记录公钥长度不合规": "the record public key the relay gave has the wrong length",
+  "中继给出的记录公钥与设备指纹不符":
+    "the record public key the relay gave does not match the device fingerprint",
+  "中继给出的记录清单不是数组": "the record list the relay gave is not an array",
+  "中继给出的吊销记录不是一个对象": "the revocation entry the relay gave is not an object",
+  "中继给出的吊销名单不是数组": "the revocation list the relay gave is not an array",
+  "{what}：{reason}": "{what}: {reason}",
+
+  // 配置：首次生成的样例文件（整份随语言走）。
+  "Vault Waystation 插件配置。": "Vault Waystation plugin configuration.",
+  "本文件是取值的唯一来源，视图只是它的编辑器。":
+    "This file is the only source of the settings; the interface is merely its editor.",
+  "本文件不含任何秘密：设备私钥、内容密钥与钉住的中继公钥另行存放。":
+    "This file holds no secrets: the device private key, the content key and the pinned relay public keys live elsewhere.",
+  "本设备名称，写进记录内容供对端辨认。中继看不到它，同仓库的其他设备才看得到。":
+    "Name of this device, written into the encrypted record contents so other devices can tell them apart. A relay cannot see it; only devices of the same vault can.",
+  "留空时对端只按指纹称呼本设备。":
+    "When left empty, other devices refer to this device by fingerprint alone.",
+  "仓库别名。设备在注册时按此名称请求频道，同一仓库的各设备应当写同一个名字。":
+    "Vault alias. Devices request the channel under this name at registration; every device of the same vault should write the same name.",
+  "git 可执行文件路径，留空表示从 PATH 中查找。":
+    "Path to the git executable; leave empty to look it up in PATH.",
+  "定时采集间隔（秒）。": "Interval between scheduled collections, in seconds.",
+  "窗口失焦超过该秒数后改用下面的间隔，0 表示不降频。":
+    "After the window has lost focus for this many seconds, the interval below is used; 0 means no slowdown.",
+  "失焦后的采集间隔（秒）。": "Interval while unfocused, in seconds.",
+  "是否识别冲突残留文件。": "Whether to recognise leftover files from a merge conflict.",
+  "持续故障的重提醒间隔（秒），可取值 {choices}，0 表示关闭。":
+    "Interval between repeated notices of an ongoing failure, in seconds; {choices}, and 0 means no repeat.",
+  "界面语言，可取 {choices}。auto 表示跟随 Obsidian 的界面语言；":
+    "Interface language, one of {choices}. auto follows the interface language of Obsidian;",
+  "命令名只在插件重新加载之后才会跟着变。":
+    "command names change only after the plugin is reloaded.",
+  "中继可以有多个，重复写若干段 [[relay]] 即可。":
+    "Several relays may be listed; add one more [[relay]] section for each.",
+  "transport 可取 {choices}；后两级的通信不加密或可被冒充，":
+    "transport is one of {choices}; the last two levels are unencrypted or can be impersonated,",
+  "需要显式写出，且处于这两级时不允许注册、吊销与退役。":
+    "must be written out explicitly, and registration, revocation and retirement are not allowed while one of them is in use.",
+
+  // 配置：解析与校验。
+  "配置": "configuration",
+  "配置版本为 {found}，本版本只认识 {known}":
+    "the configuration is version {found} but this version only knows {known}",
+  "配置不是合法的 TOML：{reason}": "the configuration is not valid TOML: {reason}",
+  "device 应当是一张表": "device should be a table",
+  "device.name 最长 {limit} 个字符": "device.name may be at most {limit} characters",
+  "device.name 不能含有控制字符": "device.name cannot hold control characters",
+  "缺少 channel 一节": "the channel section is missing",
+  "channel 应当是一张表": "channel should be a table",
+  "channel.alias 不能为空：注册时按它请求频道":
+    "channel.alias cannot be empty: the channel is requested under it at registration",
+  "channel.alias 最长 {limit} 个字符": "channel.alias may be at most {limit} characters",
+  "channel.alias 不能含有控制字符": "channel.alias cannot hold control characters",
+  "collect 应当是一张表": "collect should be a table",
+  "collect.idle_interval_seconds 不应小于 collect.interval_seconds：降频只会更慢":
+    "collect.idle_interval_seconds should not be smaller than collect.interval_seconds: the unfocused interval is meant to be the slower one",
+  "notify 应当是一张表": "notify should be a table",
+  "notify.repeat_seconds 只能取 {choices}（秒）": "notify.repeat_seconds must be one of {choices} (in seconds)",
+  "ui 应当是一张表": "ui should be a table",
+  "ui.language 只能取 {choices}": "ui.language must be one of {choices}",
+  "缺少 relay：至少需要配置一个中继": "relay is missing: at least one relay must be configured",
+  "relay 应当是一组中继配置，每段以 [[relay]] 开头":
+    "relay should be a list of relay settings, each written as a [[relay]] section",
+  "至少需要配置一个中继": "at least one relay must be configured",
+  "中继最多 {limit} 个，当前为 {count} 个": "at most {limit} relays are allowed but there are {count}",
+  "{where} 应当是一张表": "{where} should be a table",
+  "{where}.name 不能为空": "{where}.name cannot be empty",
+  "{where}.name 最长 {limit} 个字符": "{where}.name may be at most {limit} characters",
+  "{where}.name 与其他中继重名：{name}": "{where}.name is the same as another relay's name: {name}",
+  "{where} 的 transport 为 {transport}，地址却以 {scheme} 开头":
+    "{where} uses transport {transport} but the address starts with {scheme}",
+  "{where}.transport 不能为空：连接方式必须显式写出":
+    "{where}.transport cannot be empty: the transport must be written out explicitly",
+  "{where}.transport 只能取 {choices}": "{where}.transport must be one of {choices}",
+  "{where} 不能为空": "{where} cannot be empty",
+  "{where} 不是合法的地址：{value}": "{where} is not a valid address: {value}",
+  "{where} 的协议只能是 http 或 https，实际为 {scheme}":
+    "the scheme of {where} must be http or https but is {scheme}",
+  "{where}.{key} 应当介于 {minimum} 与 {maximum} 之间（秒），实际为 {value}":
+    "{where}.{key} should be between {minimum} and {maximum} seconds but is {value}",
+  "{where}.{key} 应当是字符串": "{where}.{key} should be a string",
+  "{where}.{key} 应当是整数": "{where}.{key} should be an integer",
+  "{where}.{key} 应当是 true 或 false": "{where}.{key} should be true or false",
+  "{where} 中不认识的配置项：{key}": "unknown setting in {where}: {key}",
 } as const;
 
 /** 可用的文案键，即英文表里有的那些中文原句。 */

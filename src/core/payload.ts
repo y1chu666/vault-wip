@@ -4,6 +4,7 @@
 // 改动文件总数、归一后的文件名清单，以及两类需要单独说明的文件（疑似假冲突、冲突残留）。
 // 清单长度有上限，超出时只上报数量并标记截断，免得一条记录超过中继允许的大小。
 import { decodeText, encodeText } from "./text.js";
+import { t } from "./i18n.js";
 
 /** 单条记录携带的文件名上限。 */
 export const MAX_PATHS = 1000;
@@ -83,41 +84,41 @@ export function decodeStatusPayload(bytes: Uint8Array): StatusPayload {
   try {
     raw = JSON.parse(decodeText(bytes));
   } catch {
-    throw new StatusPayloadError("记录内容不是合法的 JSON");
+    throw new StatusPayloadError(t("记录内容不是合法的 JSON"));
   }
 
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    throw new StatusPayloadError("记录内容应当是一个对象");
+    throw new StatusPayloadError(t("记录内容应当是一个对象"));
   }
 
   const table = raw as Record<string, unknown>;
   const allowed = ["label", "count", "truncated", "paths", "suspectFiles", "conflictFiles"];
   for (const key of Object.keys(table)) {
     if (!allowed.includes(key)) {
-      throw new StatusPayloadError(`记录内容中不认识的字段：${key}`);
+      throw new StatusPayloadError(t("记录内容中不认识的字段：{field}", { field: key }));
     }
   }
 
   const label = table["label"];
   if (typeof label !== "string") {
-    throw new StatusPayloadError("记录内容中的设备名称不合规");
+    throw new StatusPayloadError(t("记录内容中的设备名称不合规"));
   }
   if (label.length > MAX_LABEL_LENGTH || hasControlCharacter(label)) {
-    throw new StatusPayloadError("记录内容中的设备名称不合规");
+    throw new StatusPayloadError(t("记录内容中的设备名称不合规"));
   }
 
   const count = table["count"];
   if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
-    throw new StatusPayloadError("记录内容中的改动文件数不合规");
+    throw new StatusPayloadError(t("记录内容中的改动文件数不合规"));
   }
   const truncated = table["truncated"];
   if (typeof truncated !== "boolean") {
-    throw new StatusPayloadError("记录内容中的截断标记不合规");
+    throw new StatusPayloadError(t("记录内容中的截断标记不合规"));
   }
 
   const paths = readPaths(table["paths"], "paths");
   if (count < paths.length) {
-    throw new StatusPayloadError("记录内容中的改动文件数小于清单长度");
+    throw new StatusPayloadError(t("记录内容中的改动文件数小于清单长度"));
   }
 
   return {
@@ -137,20 +138,20 @@ function hasControlCharacter(value: string): boolean {
 
 function readPaths(value: unknown, field: string): string[] {
   if (!Array.isArray(value)) {
-    throw new StatusPayloadError(`记录内容中的 ${field} 应当是数组`);
+    throw new StatusPayloadError(t("记录内容中的 {field} 应当是数组", { field }));
   }
   if (value.length > MAX_PATHS) {
-    throw new StatusPayloadError(`记录内容中的 ${field} 超过 ${MAX_PATHS} 条`);
+    throw new StatusPayloadError(t("记录内容中的 {field} 超过 {limit} 条", { field, limit: MAX_PATHS }));
   }
 
   const paths: string[] = [];
   const seen = new Set<string>();
   for (const entry of value) {
     if (typeof entry !== "string") {
-      throw new StatusPayloadError(`记录内容中的 ${field} 含有非字符串条目`);
+      throw new StatusPayloadError(t("记录内容中的 {field} 含有非字符串条目", { field }));
     }
     if (entry === "" || entry.length > MAX_PATH_LENGTH || entry.includes("\u0000")) {
-      throw new StatusPayloadError(`记录内容中的 ${field} 含有不合规的路径`);
+      throw new StatusPayloadError(t("记录内容中的 {field} 含有不合规的路径", { field }));
     }
     if (!seen.has(entry)) {
       seen.add(entry);

@@ -4,6 +4,7 @@
 // 配置里不存放任何秘密，设备私钥、内容密钥与钉住的中继公钥由独立的存储负责，
 // 这样一份配置可以放心地随仓库一起备份或公开。
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
+import { t } from "./i18n.js";
 
 /** 配置格式版本。字段含义有变时递增，并在读取时按版本迁移。 */
 export const CONFIG_VERSION = 1;
@@ -128,10 +129,10 @@ export function parseConfig(text: string): Config {
   const raw = parseDocument(text);
 
   const problems: string[] = [];
-  checkKeys(raw, ["version", "device", "channel", "collect", "notify", "ui", "relay"], "配置", problems);
-  const version = readInteger(raw, "version", "配置", problems);
+  checkKeys(raw, ["version", "device", "channel", "collect", "notify", "ui", "relay"], t("配置"), problems);
+  const version = readInteger(raw, "version", t("配置"), problems);
   if (version !== undefined && version !== CONFIG_VERSION) {
-    problems.push(`配置版本为 ${version}，本版本只认识 ${CONFIG_VERSION}`);
+    problems.push(t("配置版本为 {found}，本版本只认识 {known}", { found: version, known: CONFIG_VERSION }));
   }
 
   const device = parseDevice(raw["device"], problems);
@@ -142,7 +143,7 @@ export function parseConfig(text: string): Config {
   const relay = parseRelays(raw["relay"], problems);
 
   if (problems.length > 0) {
-    throw new ConfigError(problems.join("；"));
+    throw new ConfigError(problems.join(t("；")));
   }
 
   return {
@@ -220,46 +221,47 @@ export function defaultConfig(alias: string): Config {
  * 因此需要长期保留注释的使用者应当手工编辑文件。
  */
 export function templateConfig(alias: string): string {
-  return `# Vault Waystation 插件配置。
+  const separator = t("、");
+  return `# ${t("Vault Waystation 插件配置。")}
 #
-# 本文件是取值的唯一来源，视图只是它的编辑器。
-# 本文件不含任何秘密：设备私钥、内容密钥与钉住的中继公钥另行存放。
+# ${t("本文件是取值的唯一来源，视图只是它的编辑器。")}
+# ${t("本文件不含任何秘密：设备私钥、内容密钥与钉住的中继公钥另行存放。")}
 
 version = 1
 
 [device]
-# 本设备名称，写进记录内容供对端辨认。中继看不到它，同仓库的其他设备才看得到。
-# 留空时对端只按指纹称呼本设备。
+# ${t("本设备名称，写进记录内容供对端辨认。中继看不到它，同仓库的其他设备才看得到。")}
+# ${t("留空时对端只按指纹称呼本设备。")}
 name = ""
 
 [channel]
-# 仓库别名。设备在注册时按此名称请求频道，同一仓库的各设备应当写同一个名字。
+# ${t("仓库别名。设备在注册时按此名称请求频道，同一仓库的各设备应当写同一个名字。")}
 alias = ${quote(alias)}
 
 [collect]
-# git 可执行文件路径，留空表示从 PATH 中查找。
+# ${t("git 可执行文件路径，留空表示从 PATH 中查找。")}
 git = ""
-# 定时采集间隔（秒）。
+# ${t("定时采集间隔（秒）。")}
 interval_seconds = ${DEFAULT_INTERVAL_SECONDS}
-# 窗口失焦超过该秒数后改用下面的间隔，0 表示不降频。
+# ${t("窗口失焦超过该秒数后改用下面的间隔，0 表示不降频。")}
 idle_after_seconds = ${DEFAULT_IDLE_AFTER_SECONDS}
-# 失焦后的采集间隔（秒）。
+# ${t("失焦后的采集间隔（秒）。")}
 idle_interval_seconds = ${DEFAULT_IDLE_INTERVAL_SECONDS}
-# 是否识别冲突残留文件。
+# ${t("是否识别冲突残留文件。")}
 detect_conflict_files = true
 
 [notify]
-# 持续故障的重提醒间隔（秒），可取值 ${REPEAT_SECONDS_CHOICES.join("、")}，0 表示关闭。
+# ${t("持续故障的重提醒间隔（秒），可取值 {choices}，0 表示关闭。", { choices: REPEAT_SECONDS_CHOICES.join(separator) })}
 repeat_seconds = ${DEFAULT_REPEAT_SECONDS}
 
 [ui]
-# 界面语言，可取 ${LANGUAGE_CHOICES.join("、")}。auto 表示跟随 Obsidian 的界面语言；
-# 命令名只在插件重新加载之后才会跟着变。
+# ${t("界面语言，可取 {choices}。auto 表示跟随 Obsidian 的界面语言；", { choices: LANGUAGE_CHOICES.join(separator) })}
+# ${t("命令名只在插件重新加载之后才会跟着变。")}
 language = "auto"
 
-# 中继可以有多个，重复写若干段 [[relay]] 即可。
-# transport 可取 ${TRANSPORT_LEVELS.join("、")}；后两级的通信不加密或可被冒充，
-# 需要显式写出，且处于这两级时不允许注册、吊销与退役。
+# ${t("中继可以有多个，重复写若干段 [[relay]] 即可。")}
+# ${t("transport 可取 {choices}；后两级的通信不加密或可被冒充，", { choices: TRANSPORT_LEVELS.join(separator) })}
+# ${t("需要显式写出，且处于这两级时不允许注册、吊销与退役。")}
 [[relay]]
 name = "example"
 url = "https://relay.example.com:8787"
@@ -273,7 +275,7 @@ function parseDocument(text: string): Record<string, unknown> {
     // 拒绝 __proto__ 一类键，避免配置文本影响解析结果之外的对象原型。
     return parseToml(text, { unsafeKeyBehaviour: "throw" });
   } catch (error) {
-    throw new ConfigError(`配置不是合法的 TOML：${messageOf(error)}`);
+    throw new ConfigError(t("配置不是合法的 TOML：{reason}", { reason: messageOf(error) }));
   }
 }
 
@@ -282,38 +284,38 @@ function parseDevice(value: unknown, problems: string[]): DeviceSettings {
     return { name: "" };
   }
   if (!isTable(value)) {
-    problems.push("device 应当是一张表");
+    problems.push(t("device 应当是一张表"));
     return { name: "" };
   }
 
   checkKeys(value, ["name"], "device", problems);
   const name = readString(value, "name", "device", problems) ?? "";
   if (name.length > MAX_DEVICE_NAME_LENGTH) {
-    problems.push(`device.name 最长 ${MAX_DEVICE_NAME_LENGTH} 个字符`);
+    problems.push(t("device.name 最长 {limit} 个字符", { limit: MAX_DEVICE_NAME_LENGTH }));
   } else if (containsControlCharacter(name)) {
-    problems.push("device.name 不能含有控制字符");
+    problems.push(t("device.name 不能含有控制字符"));
   }
   return { name };
 }
 
 function parseChannel(value: unknown, problems: string[]): ChannelSettings {
   if (value === undefined) {
-    problems.push("缺少 channel 一节");
+    problems.push(t("缺少 channel 一节"));
     return { alias: "" };
   }
   if (!isTable(value)) {
-    problems.push("channel 应当是一张表");
+    problems.push(t("channel 应当是一张表"));
     return { alias: "" };
   }
 
   checkKeys(value, ["alias"], "channel", problems);
   const alias = readString(value, "alias", "channel", problems) ?? "";
   if (alias === "") {
-    problems.push("channel.alias 不能为空：注册时按它请求频道");
+    problems.push(t("channel.alias 不能为空：注册时按它请求频道"));
   } else if (alias.length > MAX_ALIAS_LENGTH) {
-    problems.push(`channel.alias 最长 ${MAX_ALIAS_LENGTH} 个字符`);
+    problems.push(t("channel.alias 最长 {limit} 个字符", { limit: MAX_ALIAS_LENGTH }));
   } else if (containsControlCharacter(alias)) {
-    problems.push("channel.alias 不能含有控制字符");
+    problems.push(t("channel.alias 不能含有控制字符"));
   }
   return { alias };
 }
@@ -330,7 +332,7 @@ function parseCollect(value: unknown, problems: string[]): CollectSettings {
     return fallback;
   }
   if (!isTable(value)) {
-    problems.push("collect 应当是一张表");
+    problems.push(t("collect 应当是一张表"));
     return fallback;
   }
 
@@ -363,7 +365,7 @@ function parseCollect(value: unknown, problems: string[]): CollectSettings {
   );
 
   if (idleIntervalSeconds < intervalSeconds) {
-    problems.push("collect.idle_interval_seconds 不应小于 collect.interval_seconds：降频只会更慢");
+    problems.push(t("collect.idle_interval_seconds 不应小于 collect.interval_seconds：降频只会更慢"));
   }
 
   return { git, intervalSeconds, idleAfterSeconds, idleIntervalSeconds, detectConflictFiles };
@@ -375,14 +377,16 @@ function parseNotify(value: unknown, problems: string[]): NotifySettings {
     return fallback;
   }
   if (!isTable(value)) {
-    problems.push("notify 应当是一张表");
+    problems.push(t("notify 应当是一张表"));
     return fallback;
   }
 
   checkKeys(value, ["repeat_seconds"], "notify", problems);
   const repeatSeconds = readInteger(value, "repeat_seconds", "notify", problems) ?? fallback.repeatSeconds;
   if (!isRepeatChoice(repeatSeconds)) {
-    problems.push(`notify.repeat_seconds 只能取 ${REPEAT_SECONDS_CHOICES.join("、")}（秒）`);
+    problems.push(
+      t("notify.repeat_seconds 只能取 {choices}（秒）", { choices: REPEAT_SECONDS_CHOICES.join(t("、")) }),
+    );
   }
   return { repeatSeconds };
 }
@@ -393,14 +397,14 @@ function parseUi(value: unknown, problems: string[]): UiSettings {
     return fallback;
   }
   if (!isTable(value)) {
-    problems.push("ui 应当是一张表");
+    problems.push(t("ui 应当是一张表"));
     return fallback;
   }
 
   checkKeys(value, ["language"], "ui", problems);
   const language = readString(value, "language", "ui", problems) ?? fallback.language;
   if (!isLanguageChoice(language)) {
-    problems.push(`ui.language 只能取 ${LANGUAGE_CHOICES.join("、")}`);
+    problems.push(t("ui.language 只能取 {choices}", { choices: LANGUAGE_CHOICES.join(t("、")) }));
     return fallback;
   }
   return { language };
@@ -408,19 +412,19 @@ function parseUi(value: unknown, problems: string[]): UiSettings {
 
 function parseRelays(value: unknown, problems: string[]): RelaySettings[] {
   if (value === undefined) {
-    problems.push("缺少 relay：至少需要配置一个中继");
+    problems.push(t("缺少 relay：至少需要配置一个中继"));
     return [];
   }
   if (!Array.isArray(value)) {
-    problems.push("relay 应当是一组中继配置，每段以 [[relay]] 开头");
+    problems.push(t("relay 应当是一组中继配置，每段以 [[relay]] 开头"));
     return [];
   }
   if (value.length === 0) {
-    problems.push("至少需要配置一个中继");
+    problems.push(t("至少需要配置一个中继"));
     return [];
   }
   if (value.length > MAX_RELAYS) {
-    problems.push(`中继最多 ${MAX_RELAYS} 个，当前为 ${value.length} 个`);
+    problems.push(t("中继最多 {limit} 个，当前为 {count} 个", { limit: MAX_RELAYS, count: value.length }));
   }
 
   const relays: RelaySettings[] = [];
@@ -429,7 +433,7 @@ function parseRelays(value: unknown, problems: string[]): RelaySettings[] {
   value.forEach((entry, index) => {
     const where = `relay[${index}]`;
     if (!isTable(entry)) {
-      problems.push(`${where} 应当是一张表`);
+      problems.push(t("{where} 应当是一张表", { where }));
       return;
     }
 
@@ -439,17 +443,17 @@ function parseRelays(value: unknown, problems: string[]): RelaySettings[] {
     const transport = readTransport(entry["transport"], where, problems);
 
     if (name === "") {
-      problems.push(`${where}.name 不能为空`);
+      problems.push(t("{where}.name 不能为空", { where }));
     } else if (name.length > MAX_RELAY_NAME_LENGTH) {
-      problems.push(`${where}.name 最长 ${MAX_RELAY_NAME_LENGTH} 个字符`);
+      problems.push(t("{where}.name 最长 {limit} 个字符", { where, limit: MAX_RELAY_NAME_LENGTH }));
     } else if (names.has(name)) {
-      problems.push(`${where}.name 与其他中继重名：${name}`);
+      problems.push(t("{where}.name 与其他中继重名：{name}", { where, name }));
     }
     names.add(name);
 
     const scheme = checkUrl(url, `${where}.url`, problems);
     if (scheme !== undefined && transport !== undefined && !isSchemeConsistent(transport, scheme)) {
-      problems.push(`${where} 的 transport 为 ${transport}，地址却以 ${scheme} 开头`);
+      problems.push(t("{where} 的 transport 为 {transport}，地址却以 {scheme} 开头", { where, transport, scheme }));
     }
 
     if (transport !== undefined && name !== "" && url !== "") {
@@ -462,11 +466,13 @@ function parseRelays(value: unknown, problems: string[]): RelaySettings[] {
 
 function readTransport(value: unknown, where: string, problems: string[]): TransportLevel | undefined {
   if (value === undefined) {
-    problems.push(`${where}.transport 不能为空：连接方式必须显式写出`);
+    problems.push(t("{where}.transport 不能为空：连接方式必须显式写出", { where }));
     return undefined;
   }
   if (typeof value !== "string" || !isTransportLevel(value)) {
-    problems.push(`${where}.transport 只能取 ${TRANSPORT_LEVELS.join("、")}`);
+    problems.push(
+      t("{where}.transport 只能取 {choices}", { where, choices: TRANSPORT_LEVELS.join(t("、")) }),
+    );
     return undefined;
   }
   return value;
@@ -483,7 +489,7 @@ function isSchemeConsistent(transport: TransportLevel, scheme: string): boolean 
 /** 校验地址，返回识别出的协议名；地址不合规时返回空。 */
 function checkUrl(value: string, where: string, problems: string[]): string | undefined {
   if (value === "") {
-    problems.push(`${where} 不能为空`);
+    problems.push(t("{where} 不能为空", { where }));
     return undefined;
   }
 
@@ -491,13 +497,13 @@ function checkUrl(value: string, where: string, problems: string[]): string | un
   try {
     parsed = new URL(value);
   } catch {
-    problems.push(`${where} 不是合法的地址：${value}`);
+    problems.push(t("{where} 不是合法的地址：{value}", { where, value }));
     return undefined;
   }
 
   const scheme = parsed.protocol.replace(":", "");
   if (scheme !== "http" && scheme !== "https") {
-    problems.push(`${where} 的协议只能是 http 或 https，实际为 ${scheme}`);
+    problems.push(t("{where} 的协议只能是 http 或 https，实际为 {scheme}", { where, scheme }));
     return undefined;
   }
   // http 与 https 属于特殊协议，解析器已经保证主机名非空，这里不再重复判断。
@@ -517,7 +523,15 @@ function readInterval(
     return fallback;
   }
   if (value < minimum || value > MAX_INTERVAL_SECONDS) {
-    problems.push(`${where}.${key} 应当介于 ${minimum} 与 ${MAX_INTERVAL_SECONDS} 之间（秒），实际为 ${value}`);
+    problems.push(
+      t("{where}.{key} 应当介于 {minimum} 与 {maximum} 之间（秒），实际为 {value}", {
+        where,
+        key,
+        minimum,
+        maximum: MAX_INTERVAL_SECONDS,
+        value,
+      }),
+    );
     return fallback;
   }
   return value;
@@ -538,7 +552,7 @@ function readString(
     return undefined;
   }
   if (typeof value !== "string") {
-    problems.push(`${where}.${key} 应当是字符串`);
+    problems.push(t("{where}.{key} 应当是字符串", { where, key }));
     return undefined;
   }
   return value;
@@ -555,7 +569,7 @@ function readInteger(
     return undefined;
   }
   if (typeof value !== "number" || !Number.isSafeInteger(value)) {
-    problems.push(`${where}.${key} 应当是整数`);
+    problems.push(t("{where}.{key} 应当是整数", { where, key }));
     return undefined;
   }
   return value;
@@ -572,7 +586,7 @@ function readBoolean(
     return undefined;
   }
   if (typeof value !== "boolean") {
-    problems.push(`${where}.${key} 应当是 true 或 false`);
+    problems.push(t("{where}.{key} 应当是 true 或 false", { where, key }));
     return undefined;
   }
   return value;
@@ -587,7 +601,7 @@ function checkKeys(
 ): void {
   for (const key of Object.keys(table)) {
     if (!allowed.includes(key)) {
-      problems.push(`${where} 中不认识的配置项：${key}`);
+      problems.push(t("{where} 中不认识的配置项：{key}", { where, key }));
     }
   }
 }

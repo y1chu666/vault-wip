@@ -5,6 +5,7 @@
 // 私钥永远不导出、不导入，也不进入版本库。
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import type { KeyObject } from "node:crypto";
+import { t } from "./i18n.js";
 
 /** 种子字节数。 */
 export const SEED_BYTES = 32;
@@ -50,7 +51,7 @@ export class DeviceKey {
   /** 由三十二字节种子构造密钥对。 */
   static fromSeed(seed: Uint8Array): DeviceKey {
     if (seed.length !== SEED_BYTES) {
-      throw new Error(`种子应为 ${SEED_BYTES} 字节，实际为 ${seed.length} 字节`);
+      throw new Error(t("种子应为 {expected} 字节，实际为 {actual} 字节", { expected: SEED_BYTES, actual: seed.length }));
     }
     const der = Buffer.concat([PKCS8_PREFIX, Buffer.from(seed)]);
     return DeviceKey.fromKeyObject(createPrivateKey({ key: der, format: "der", type: "pkcs8" }));
@@ -59,7 +60,7 @@ export class DeviceKey {
   /** 解析十六进制种子文本，与服务端的私钥编码一致。 */
   static fromSeedText(text: string): DeviceKey {
     if (!/^[0-9a-f]{64}$/.test(text)) {
-      throw new Error(`私钥应为 ${SEED_BYTES * 2} 位小写十六进制`);
+      throw new Error(t("私钥应为 {length} 位小写十六进制", { length: SEED_BYTES * 2 }));
     }
     return DeviceKey.fromSeed(Buffer.from(text, "hex"));
   }
@@ -82,7 +83,7 @@ export class DeviceKey {
   private static fromKeyObject(keyObject: KeyObject): DeviceKey {
     const der = keyObject.export({ format: "der", type: "pkcs8" });
     if (!der.subarray(0, PKCS8_PREFIX.length).equals(PKCS8_PREFIX)) {
-      throw new Error("私钥不是 Ed25519 的 PKCS#8 编码");
+      throw new Error(t("私钥不是 Ed25519 的 PKCS#8 编码"));
     }
 
     const seed = der.subarray(der.length - SEED_BYTES);
@@ -96,7 +97,7 @@ export class DeviceKey {
 /** 计算公钥指纹。 */
 export function fingerprintOf(publicKey: Uint8Array): string {
   if (publicKey.length !== PUBLIC_KEY_BYTES) {
-    throw new Error(`公钥应为 ${PUBLIC_KEY_BYTES} 字节，实际为 ${publicKey.length} 字节`);
+    throw new Error(t("公钥应为 {expected} 字节，实际为 {actual} 字节", { expected: PUBLIC_KEY_BYTES, actual: publicKey.length }));
   }
   return createHash("sha256").update(publicKey).digest("hex");
 }
@@ -104,7 +105,7 @@ export function fingerprintOf(publicKey: Uint8Array): string {
 /** 校验指纹文本，通过则返回原文本。 */
 export function parseFingerprint(text: string): string {
   if (!/^[0-9a-f]{64}$/.test(text)) {
-    throw new Error(`指纹应为 ${FINGERPRINT_LENGTH} 位小写十六进制`);
+    throw new Error(t("指纹应为 {length} 位小写十六进制", { length: FINGERPRINT_LENGTH }));
   }
   return text;
 }

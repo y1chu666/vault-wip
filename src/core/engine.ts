@@ -18,6 +18,7 @@ import {
   type ContentKey,
 } from "./crypto.js";
 import { formatRfc3339, parseRfc3339, signRecord, verifyRecord } from "./envelope.js";
+import { t } from "./i18n.js";
 import {
   CollectError,
   collectStatus,
@@ -295,7 +296,7 @@ export class Engine {
           alias: channel.channelAlias,
         };
         this.keepPin(client);
-        this.note(`已在中继 ${client.name} 注册频道 ${channel.channelAlias}`);
+        this.note(t("已在中继 {relay} 注册频道 {channel}", { relay: client.name, channel: channel.channelAlias }));
       } catch (error) {
         failures.push(`${client.name}：${describe(error)}`);
       }
@@ -307,14 +308,14 @@ export class Engine {
     await this.persist();
     this.options.onChange?.();
     if (failures.length > 0) {
-      throw new StorageError(`注册未全部完成：${failures.join("；")}`);
+      throw new StorageError(t("注册未全部完成：{failures}", { failures: failures.join(t("；")) }));
     }
   }
 
   /** 吊销同一频道内的另一台设备，各中继都要报到。 */
   async revoke(fingerprint: string): Promise<void> {
     if (Object.keys(this.state.channels).length === 0) {
-      throw new StorageError("尚未在任何中继上注册，无法吊销设备");
+      throw new StorageError(t("尚未在任何中继上注册，无法吊销设备"));
     }
 
     const failures: string[] = [];
@@ -326,7 +327,7 @@ export class Engine {
       try {
         await client.revoke(channel.channelId, fingerprint);
         this.keepPin(client);
-        this.note(`已在中继 ${client.name} 吊销设备 ${short(fingerprint)}`);
+        this.note(t("已在中继 {relay} 吊销设备 {fingerprint}", { relay: client.name, fingerprint: short(fingerprint) }));
       } catch (error) {
         failures.push(`${client.name}：${describe(error)}`);
       }
@@ -339,7 +340,7 @@ export class Engine {
     this.refreshConflicts();
     this.options.onChange?.();
     if (failures.length > 0) {
-      throw new StorageError(`吊销未全部完成：${failures.join("；")}`);
+      throw new StorageError(t("吊销未全部完成：{failures}", { failures: failures.join(t("；")) }));
     }
   }
 
@@ -360,7 +361,7 @@ export class Engine {
       try {
         await client.retire(channel.channelId);
         delete this.state.channels[client.name];
-        this.note(`已在中继 ${client.name} 退役本设备`);
+        this.note(t("已在中继 {relay} 退役本设备", { relay: client.name }));
         succeeded += 1;
       } catch (error) {
         failures.push(`${client.name}：${describe(error)}`);
@@ -375,7 +376,7 @@ export class Engine {
     await this.persist();
     this.options.onChange?.();
     if (failures.length > 0) {
-      throw new StorageError(`退役未全部完成：${failures.join("；")}`);
+      throw new StorageError(t("退役未全部完成：{failures}", { failures: failures.join(t("；")) }));
     }
   }
 
@@ -388,7 +389,7 @@ export class Engine {
    */
   async resetSequence(): Promise<void> {
     this.state.sequence = 0;
-    this.note("本机计数已重置为 0，下一次上报将按中继给出的序号重新对齐");
+    this.note(t("本机计数已重置为 0，下一次上报将按中继给出的序号重新对齐"));
     await this.persist();
     this.options.onChange?.();
   }
@@ -423,7 +424,7 @@ export class Engine {
   private async writeContentKey(key: ContentKey): Promise<void> {
     this.contentKey = key;
     await writeTextFile(this.options.files.contentKey, `${encodeContentKey(key)}\n`, 0o600);
-    this.note("已换用新的内容密钥，此前用旧密钥加密的对端记录读不出来");
+    this.note(t("已换用新的内容密钥，此前用旧密钥加密的对端记录读不出来"));
     this.options.onChange?.();
   }
 
@@ -459,7 +460,7 @@ export class Engine {
       this.local = content;
       this.collectedAt = this.now();
     } catch (error) {
-      this.note(`采集失败：${describe(error)}`);
+      this.note(t("采集失败：{reason}", { reason: describe(error) }));
     } finally {
       this.collectMillis = this.clock() - started;
     }
@@ -468,7 +469,7 @@ export class Engine {
       try {
         await this.reportAll(content);
       } catch (error) {
-        this.note(`上报失败：${describe(error)}`);
+        this.note(t("上报失败：{reason}", { reason: describe(error) }));
       }
     }
 
@@ -504,12 +505,12 @@ export class Engine {
       return;
     }
 
-    this.note(`中继上已有本设备的记录（序号 ${String(rejected)}），按它推进后重报`);
+    this.note(t("中继上已有本设备的记录（序号 {sequence}），按它推进后重报", { sequence: rejected }));
     this.state.sequence = rejected;
     const again = await this.reportRound(content);
     if (again !== null) {
       this.note(
-        "按中继给出的序号重报之后仍被拒：同一份身份可能被复制到了另一台设备上，或本机计数已不可用；请在诊断栏核对状态",
+        t("按中继给出的序号重报之后仍被拒：同一份身份可能被复制到了另一台设备上，或本机计数已不可用；请在诊断栏核对状态"),
       );
     }
   }
@@ -524,7 +525,9 @@ export class Engine {
     // 序号已经加到无法精确表示时，上报只会被中继拒绝；停在这里并说清自救办法。
     if (sequence > MAX_SEQUENCE) {
       this.note(
-        `本机计数已达可表示上界（${String(MAX_SEQUENCE)}），本次不上报：请在诊断栏核对状态后重置本机计数`,
+        t("本机计数已达可表示上界（{limit}），本次不上报：请在诊断栏核对状态后重置本机计数", {
+          limit: MAX_SEQUENCE,
+        }),
       );
       return null;
     }
@@ -536,7 +539,10 @@ export class Engine {
       this.clients.map(async (client) => {
         const channel = this.state.channels[client.name];
         if (channel === undefined) {
-          throw new RelayError("transport", `中继 ${client.name}：尚未注册本仓库，请先填写注册凭证并注册`);
+          throw new RelayError(
+            "transport",
+            t("中继 {relay}：尚未注册本仓库，请先填写注册凭证并注册", { relay: client.name }),
+          );
         }
 
         // 记录签名覆盖频道标识，而频道标识由各中继分别生成，因此签名按中继分别做。
@@ -584,7 +590,9 @@ export class Engine {
           // 采信它会把本机计数顶到无法再加一的位置，此后一次也报不上去，连重置都会
           // 被立刻顶回来。这样的既有序号只会来自异常的中继，记一笔异常而不采信。
           this.note(
-            `中继 ${client.name} 给出的本设备既有序号已达可表示上界，不予采信：请在诊断栏核对状态`,
+            t("中继 {relay} 给出的本设备既有序号已达可表示上界，不予采信：请在诊断栏核对状态", {
+              relay: client.name,
+            }),
           );
         } else {
           highestOwn = Math.max(highestOwn ?? 0, reply.own.sequence);
@@ -597,11 +605,15 @@ export class Engine {
       // 舍弃与截断都要说出来：不言不语的「少了几条」会被当成对方没有改动。
       if (reply.skipped.length > 0) {
         this.note(
-          `中继 ${client.name} 回送的内容里有 ${String(reply.skipped.length)} 条读不出来，已放弃：${reply.skipped[0] ?? ""}`,
+          t("中继 {relay} 回送的内容里有 {count} 条读不出来，已放弃：{detail}", {
+            relay: client.name,
+            count: reply.skipped.length,
+            detail: reply.skipped[0] ?? "",
+          }),
         );
       }
       if (reply.truncated) {
-        this.note(`中继 ${client.name} 回送的记录已达上限，本次只取回一部分，其余下一轮再取`);
+        this.note(t("中继 {relay} 回送的记录已达上限，本次只取回一部分，其余下一轮再取", { relay: client.name }));
       }
     });
 
@@ -653,7 +665,7 @@ export class Engine {
         record.signature,
       );
       if (!signed) {
-        this.drop(record.fingerprint, "记录签名核不过，内容可能已被改动");
+        this.drop(record.fingerprint, t("记录签名核不过，内容可能已被改动"));
         continue;
       }
 
@@ -673,14 +685,17 @@ export class Engine {
     const merged = mergePeers(this.state.peers, incoming);
     this.state.peers = merged.peers;
     if (merged.accepted.length > 0) {
-      this.note(`从 ${relayName} 取回 ${String(merged.accepted.length)} 台设备的状态`);
+      this.note(t("从 {relay} 取回 {count} 台设备的状态", { relay: relayName, count: merged.accepted.length }));
     }
 
     // 序号回退在多中继并存时属于常态（另一台中继上的记录还没跟上），因此只报同序号两份内容这一种异常。
     const mismatches = merged.anomalies.filter((anomaly) => anomaly.kind === "mismatch");
     for (const anomaly of mismatches) {
       this.note(
-        `设备 ${short(anomaly.fingerprint)} 在序号 ${String(anomaly.incomingSequence)} 上给出了两份内容，已保留先前那份`,
+        t("设备 {fingerprint} 在序号 {incoming} 上给出了两份内容，已保留先前那份", {
+          fingerprint: short(anomaly.fingerprint),
+          incoming: anomaly.incomingSequence,
+        }),
       );
     }
     this.anomalies = [...this.anomalies.filter((anomaly) => anomaly.kind === "mismatch"), ...mismatches].slice(
@@ -693,7 +708,7 @@ export class Engine {
     for (const revocation of revocations) {
       if (!this.state.revoked.includes(revocation.fingerprint)) {
         this.state.revoked = [...this.state.revoked, revocation.fingerprint];
-        this.note(`设备 ${short(revocation.fingerprint)} 已被吊销，此后不再参与判断`);
+        this.note(t("设备 {fingerprint} 已被吊销，此后不再参与判断", { fingerprint: short(revocation.fingerprint) }));
       }
     }
   }
@@ -718,7 +733,7 @@ export class Engine {
       allFailing && this.failureSince !== null
         ? {
             since: this.failureSince,
-            message: this.relayStatus.get(failing[0]?.name ?? "")?.lastFailure ?? "原因不明",
+            message: this.relayStatus.get(failing[0]?.name ?? "")?.lastFailure ?? t("原因不明"),
           }
         : null;
 
@@ -727,7 +742,7 @@ export class Engine {
       focused: this.options.isFocused?.() ?? true,
       conflicts: this.conflicts,
       peersWithChanges: this.activePeers().filter((peer) => peer.payload.count > 0),
-      relayName: failing.map((client) => client.name).join("、"),
+      relayName: failing.map((client) => client.name).join(t("、")),
       failure,
     });
 
@@ -741,7 +756,7 @@ export class Engine {
     const previous = this.relayStatus.get(name);
     this.relayStatus.set(name, { lastSuccessAt: this.now(), lastFailure: null });
     if (previous !== undefined && previous.lastFailure !== null) {
-      this.note(`与中继 ${name} 的联系已恢复`);
+      this.note(t("与中继 {relay} 的联系已恢复", { relay: name }));
     }
   }
 
@@ -750,7 +765,7 @@ export class Engine {
     const previous = this.relayStatus.get(name);
     this.relayStatus.set(name, { lastSuccessAt: previous?.lastSuccessAt ?? null, lastFailure: message });
     if (previous?.lastFailure !== message) {
-      this.note(`与中继 ${name} 通信失败：${message}`);
+      this.note(t("与中继 {relay} 通信失败：{reason}", { relay: name, reason: message }));
     }
   }
 
@@ -783,7 +798,7 @@ export class Engine {
       ...this.dropped.slice(-(MAX_DIAGNOSTICS - 1)),
       { fingerprint, reason, at: formatRfc3339(this.now()) },
     ];
-    this.note(`舍弃设备 ${short(fingerprint)} 的记录：${reason}`);
+    this.note(t("舍弃设备 {fingerprint} 的记录：{reason}", { fingerprint: short(fingerprint), reason }));
   }
 
   /** 记一笔事件。 */
@@ -829,7 +844,9 @@ function describe(error: unknown): string {
   if (error instanceof RelayError) {
     // 中继自己写的说明只作留痕：有些问题只有它说得清，例如序号越过了可表示的范围。
     const server = error.detail.serverMessage;
-    return server === undefined || server === "" ? error.message : `${error.message}（中继说明：${server}）`;
+    return server === undefined || server === ""
+      ? error.message
+      : t("{message}（中继说明：{detail}）", { message: error.message, detail: server });
   }
   if (error instanceof CollectError || error instanceof StorageError) {
     return error.message;

@@ -5,6 +5,7 @@
 // 因此判断一律依据错误代码，文案只在诊断里原样呈现。
 import { isDegraded, type TransportLevel } from "./config.js";
 import { newNonce, nowSeconds, signRequest, verifyResponse } from "./envelope.js";
+import { t, type MessageKey } from "./i18n.js";
 import { fingerprintOf, parseFingerprint, type DeviceKey } from "./identity.js";
 import { decodeText, encodeText } from "./text.js";
 import { send, TransportError } from "./transport.js";
@@ -136,15 +137,15 @@ export class RelayClient {
 
   /** 注册本设备，取得频道。注册属于破坏性操作，降级传输下不做。 */
   async register(channel: string, credential: string): Promise<RelayChannel> {
-    this.refuseWhenDegraded("注册");
+    this.refuseWhenDegraded("{relay}：当前传输级别属于降级，不允许执行注册");
     const reply = await this.call<{ channel_id?: unknown; channel_alias?: unknown }>(REQUEST_PATHS.register, {
       channel,
       credential,
       public_key: Buffer.from(this.options.key.publicKey).toString("base64"),
     });
     return {
-      channelId: readString(reply.channel_id, "频道标识"),
-      channelAlias: readString(reply.channel_alias, "频道别名"),
+      channelId: readString(reply.channel_id, t("频道标识")),
+      channelAlias: readString(reply.channel_alias, t("频道别名")),
     };
   }
 
@@ -171,14 +172,14 @@ export class RelayClient {
     });
 
     if (typeof reply.accepted !== "boolean") {
-      throw new RelayError("transport", "中继的回应里没有说明上报是否被接受");
+      throw new RelayError("transport", t("中继的回应里没有说明上报是否被接受"));
     }
 
     const skipped: string[] = [];
     const own =
       reply.own === undefined || reply.own === null
         ? null
-        : readRecordOrNull(reply.own, skipped, "本设备的记录");
+        : readRecordOrNull(reply.own, skipped, t("本设备的记录"));
 
     return {
       accepted: reply.accepted,
@@ -193,21 +194,21 @@ export class RelayClient {
 
   /** 吊销同一频道内的另一台设备。属于破坏性操作，降级传输下不做。 */
   async revoke(channelId: string, target: string): Promise<string> {
-    this.refuseWhenDegraded("吊销");
+    this.refuseWhenDegraded("{relay}：当前传输级别属于降级，不允许执行吊销");
     const reply = await this.call<{ revoked?: unknown }>(REQUEST_PATHS.revoke, {
       channel_id: channelId,
       target,
     });
-    return readString(reply.revoked, "被吊销的设备指纹");
+    return readString(reply.revoked, t("被吊销的设备指纹"));
   }
 
   /** 本设备退役：删除本设备在中继上的数据，并记入吊销名单。属于破坏性操作。 */
   async retire(channelId: string): Promise<string> {
-    this.refuseWhenDegraded("退役");
+    this.refuseWhenDegraded("{relay}：当前传输级别属于降级，不允许执行退役");
     const reply = await this.call<{ retired?: unknown }>(REQUEST_PATHS.retire, {
       channel_id: channelId,
     });
-    return readString(reply.retired, "退役的设备指纹");
+    return readString(reply.retired, t("退役的设备指纹"));
   }
 
   /** 发出一次带签名的请求，并核对回应。 */
@@ -260,10 +261,10 @@ export class RelayClient {
     try {
       parsed = JSON.parse(decodeText(response.body));
     } catch {
-      throw new RelayError("transport", `${this.describe()}：回应的正文不是合法的 JSON`);
+      throw new RelayError("transport", t("{relay}：回应的正文不是合法的 JSON", { relay: this.describe() }));
     }
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      throw new RelayError("transport", `${this.describe()}：回应的正文不是一个对象`);
+      throw new RelayError("transport", t("{relay}：回应的正文不是一个对象", { relay: this.describe() }));
     }
     return parsed as T;
   }
@@ -282,11 +283,11 @@ export class RelayClient {
     const publicKeyBase64 = response.headers["x-waystation-public-key"];
     const signatureHex = response.headers["x-waystation-signature"];
     if (fingerprint === undefined || publicKeyBase64 === undefined || signatureHex === undefined) {
-      throw new RelayError("transport", `${this.describe()}：回应没有签名`);
+      throw new RelayError("transport", t("{relay}：回应没有签名", { relay: this.describe() }));
     }
 
     if (!/^[0-9a-f]{128}$/.test(signatureHex)) {
-      throw new RelayError("transport", `${this.describe()}：回应签名的编码不合规`);
+      throw new RelayError("transport", t("{relay}：回应签名的编码不合规", { relay: this.describe() }));
     }
     const signature = Buffer.from(signatureHex, "hex");
 
@@ -296,12 +297,15 @@ export class RelayClient {
       publicKey = new Uint8Array(Buffer.from(publicKeyBase64, "base64"));
       parsedFingerprint = parseFingerprint(fingerprint);
     } catch (error) {
-      throw new RelayError("transport", `${this.describe()}：回应里的公钥或指纹不合规`, {
+      throw new RelayError(
+        "transport",
+        t("{relay}：回应里的公钥或指纹不合规", { relay: this.describe() }),
+        {
         serverMessage: messageOf(error),
       });
     }
     if (publicKey.length !== 32 || fingerprintOf(publicKey) !== parsedFingerprint) {
-      throw new RelayError("transport", `${this.describe()}：回应里的公钥与指纹不符`);
+      throw new RelayError("transport", t("{relay}：回应里的公钥与指纹不符", { relay: this.describe() }));
     }
 
     if (this.pin === null) {
@@ -315,7 +319,9 @@ export class RelayClient {
       if (this.pin.serverFingerprint !== parsedFingerprint) {
         throw new RelayError(
           "pin",
-          `${this.describe()}：中继的公钥指纹与钉住的值不同，已停止通信，请重新核对后再配对`,
+          t("{relay}：中继的公钥指纹与钉住的值不同，已停止通信，请重新核对后再配对", {
+            relay: this.describe(),
+          }),
           { serverMessage: parsedFingerprint },
         );
       }
@@ -326,7 +332,10 @@ export class RelayClient {
         signature,
       );
       if (!accepted) {
-        throw new RelayError("signature", `${this.describe()}：回应的签名核不过，可能有人在中间改动`);
+        throw new RelayError(
+          "signature",
+          t("{relay}：回应的签名核不过，可能有人在中间改动", { relay: this.describe() }),
+        );
       }
     }
 
@@ -354,45 +363,70 @@ export class RelayClient {
       // 正文不是 JSON 时只留状态码，够用来判断发生了什么。
     }
 
-    const wording = ERROR_WORDING[code] ?? `中继拒绝了这次请求（${code === "" ? "未给出代码" : code}）`;
-    return new RelayError("server", `${this.describe()}：${wording}`, { code, status, serverMessage });
+    const known = errorWording(code);
+    const wording =
+      known === ""
+        ? t("中继拒绝了这次请求（{code}）", { code: code === "" ? t("未给出代码") : code })
+        : known;
+    return new RelayError("server", t("{relay}：{wording}", { relay: this.describe(), wording }), {
+      code,
+      status,
+      serverMessage,
+    });
   }
 
   /** 钉住信息尚未建立时说明这是程序错误，而不是通信问题。 */
   private requirePin(): RelayPin {
     if (this.pin === null) {
-      throw new RelayError("transport", `${this.describe()}：通信结束却没有记下中继公钥`);
+      throw new RelayError("transport", t("{relay}：通信结束却没有记下中继公钥", { relay: this.describe() }));
     }
     return this.pin;
   }
 
-  private refuseWhenDegraded(action: string): void {
+  /**
+   * 降级传输下不允许注册、吊销与退役。
+   *
+   * 这三步都由中继代劳，而中间人在场的两级通信挡不住伪造，因此宁可拒绝执行：
+   * 参数量是一整句话，免得译文里夹进一个中文动词。
+   */
+  private refuseWhenDegraded(wording: MessageKey): void {
     if (this.degraded) {
-      throw new RelayError(
-        "transport",
-        `${this.describe()}：当前传输级别属于降级，不允许执行${action}`,
-      );
+      throw new RelayError("transport", t(wording, { relay: this.describe() }));
     }
   }
 
   private describe(): string {
-    return `中继 ${this.options.name}`;
+    return t("中继 {relay}", { relay: this.options.name });
   }
 }
 
-/** 错误代码对应的说法。 */
-const ERROR_WORDING: Readonly<Record<string, string>> = {
-  bad_request: "中继认为请求不合规",
-  bad_signature: "中继没有通过本设备的签名校验",
-  unauthorized: "本设备未注册，或已被吊销",
-  forbidden: "中继不允许这次操作",
-  replay: "中继认为这是一次重放，可能是时钟偏差或重复发送",
-  skew: "本机与中继的时间相差过大，请校正时间",
-  not_found: "中继上找不到对应的频道或记录",
-  conflict: "与中继上的既有状态冲突",
-  limit: "请求过于频繁，或超出中继的上限",
-  internal: "中继内部出错",
-};
+/** 错误代码对应的说法；不认识的代码返回空。文案随语言变，因此每次现取。 */
+function errorWording(code: string): string {
+  switch (code) {
+    case "bad_request":
+      return t("中继认为请求不合规");
+    case "bad_signature":
+      return t("中继没有通过本设备的签名校验");
+    case "unauthorized":
+      return t("本设备未注册，或已被吊销");
+    case "forbidden":
+      return t("中继不允许这次操作");
+    case "replay":
+      return t("中继认为这是一次重放，可能是时钟偏差或重复发送");
+    case "skew":
+      return t("本机与中继的时间相差过大，请校正时间");
+    case "not_found":
+      return t("中继上找不到对应的频道或记录");
+    case "conflict":
+      return t("与中继上的既有状态冲突");
+    case "limit":
+      return t("请求过于频繁，或超出中继的上限");
+    case "internal":
+      return t("中继内部出错");
+    default:
+      return "";
+  }
+}
 
 /** 把中继地址与端点路径接起来。 */
 export function joinUrl(base: string, path: string): string {
@@ -401,37 +435,37 @@ export function joinUrl(base: string, path: string): string {
 
 function readString(value: unknown, what: string): string {
   if (typeof value !== "string") {
-    throw new RelayError("transport", `中继的回应里缺少${what}`);
+    throw new RelayError("transport", t("中继的回应里缺少{what}", { what }));
   }
   return value;
 }
 
 function readRecord(raw: unknown): PeerRecord {
   if (typeof raw !== "object" || raw === null) {
-    throw new RelayError("transport", "中继给出的记录不是一个对象");
+    throw new RelayError("transport", t("中继给出的记录不是一个对象"));
   }
   const fields = raw as Record<string, unknown>;
   const sequence = fields["sequence"];
   if (typeof sequence !== "number" || !Number.isSafeInteger(sequence) || sequence < 0) {
-    throw new RelayError("transport", "中继给出的记录序号不合规");
+    throw new RelayError("transport", t("中继给出的记录序号不合规"));
   }
 
-  const publicKey = decodeBase64(fields["public_key"], "记录中的公钥");
+  const publicKey = decodeBase64(fields["public_key"], t("记录中的公钥"));
   if (publicKey.length !== 32) {
-    throw new RelayError("transport", "中继给出的记录公钥长度不合规");
+    throw new RelayError("transport", t("中继给出的记录公钥长度不合规"));
   }
-  const fingerprint = readString(fields["fingerprint"], "记录中的设备指纹");
+  const fingerprint = readString(fields["fingerprint"], t("记录中的设备指纹"));
   if (fingerprintOf(publicKey) !== fingerprint) {
-    throw new RelayError("transport", "中继给出的记录公钥与设备指纹不符");
+    throw new RelayError("transport", t("中继给出的记录公钥与设备指纹不符"));
   }
 
   return {
     fingerprint,
     publicKey,
     sequence,
-    collectedAt: readString(fields["collected_at"], "记录中的采集时间"),
-    payload: decodeBase64(fields["payload"], "记录内容"),
-    signature: decodeBase64(fields["signature"], "记录签名"),
+    collectedAt: readString(fields["collected_at"], t("记录中的采集时间")),
+    payload: decodeBase64(fields["payload"], t("记录内容")),
+    signature: decodeBase64(fields["signature"], t("记录签名")),
   };
 }
 
@@ -446,19 +480,19 @@ function readRecordOrNull(raw: unknown, skipped: string[], what: string): PeerRe
   try {
     return readRecord(raw);
   } catch (error) {
-    skipped.push(`${what}：${messageOf(error)}`);
+    skipped.push(t("{what}：{reason}", { what, reason: messageOf(error) }));
     return null;
   }
 }
 
 function readRecords(raw: unknown, skipped: string[]): PeerRecord[] {
   if (!Array.isArray(raw)) {
-    throw new RelayError("transport", "中继给出的记录清单不是数组");
+    throw new RelayError("transport", t("中继给出的记录清单不是数组"));
   }
   const entries = raw as unknown[];
   const records: PeerRecord[] = [];
   for (const entry of entries) {
-    const record = readRecordOrNull(entry, skipped, "一条对端记录");
+    const record = readRecordOrNull(entry, skipped, t("一条对端记录"));
     if (record !== null) {
       records.push(record);
     }
@@ -476,31 +510,31 @@ function readRevocationOrNull(raw: unknown, skipped: string[], what: string): Re
   try {
     return readRevocation(raw);
   } catch (error) {
-    skipped.push(`${what}：${messageOf(error)}`);
+    skipped.push(t("{what}：{reason}", { what, reason: messageOf(error) }));
     return null;
   }
 }
 
 function readRevocation(raw: unknown): RevocationRecord {
   if (typeof raw !== "object" || raw === null) {
-    throw new RelayError("transport", "中继给出的吊销记录不是一个对象");
+    throw new RelayError("transport", t("中继给出的吊销记录不是一个对象"));
   }
   const fields = raw as Record<string, unknown>;
   return {
-    fingerprint: readString(fields["fingerprint"], "吊销记录中的设备指纹"),
-    by: readString(fields["by"], "吊销记录中的发起设备"),
-    at: readString(fields["at"], "吊销记录中的时间"),
+    fingerprint: readString(fields["fingerprint"], t("吊销记录中的设备指纹")),
+    by: readString(fields["by"], t("吊销记录中的发起设备")),
+    at: readString(fields["at"], t("吊销记录中的时间")),
   };
 }
 
 function readRevocations(raw: unknown, skipped: string[]): RevocationRecord[] {
   if (!Array.isArray(raw)) {
-    throw new RelayError("transport", "中继给出的吊销名单不是数组");
+    throw new RelayError("transport", t("中继给出的吊销名单不是数组"));
   }
   const entries = raw as unknown[];
   const revocations: RevocationRecord[] = [];
   for (const entry of entries) {
-    const revocation = readRevocationOrNull(entry, skipped, "一条吊销纪录");
+    const revocation = readRevocationOrNull(entry, skipped, t("一条吊销纪录"));
     if (revocation !== null) {
       revocations.push(revocation);
     }
@@ -510,11 +544,11 @@ function readRevocations(raw: unknown, skipped: string[]): RevocationRecord[] {
 
 function decodeBase64(value: unknown, what: string): Uint8Array {
   if (typeof value !== "string") {
-    throw new RelayError("transport", `中继的回应里缺少${what}`);
+    throw new RelayError("transport", t("中继的回应里缺少{what}", { what }));
   }
   const bytes = new Uint8Array(Buffer.from(value, "base64"));
   if (bytes.length === 0) {
-    throw new RelayError("transport", `中继给出的${what}是空的`);
+    throw new RelayError("transport", t("中继给出的{what}是空的", { what }));
   }
   return bytes;
 }
