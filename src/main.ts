@@ -9,8 +9,8 @@ import { parseConfig, templateConfig, type Config } from "./core/config.js";
 import { Engine, type EngineSnapshot } from "./core/engine.js";
 import { PLUGIN_NAME, getLocale, setLocale, t, type Locale } from "./core/i18n.js";
 import { pluginFiles, readTextFile, writeTextFile, type PluginFiles } from "./core/storage.js";
-import { WaystationSettingTab } from "./settings.js";
-import { VIEW_TYPE, WaystationView } from "./view.js";
+import { WipSettingTab } from "./settings.js";
+import { VIEW_TYPE, WipView } from "./view.js";
 
 /** 提醒与状态栏统一带上插件名：通知中心里同时有几条时，先认得出是谁发的。 */
 function prefixed(text: string): string {
@@ -30,15 +30,15 @@ function localeFrom(choice: Config["ui"]["language"]): Locale {
   return getLanguage().toLowerCase().startsWith("zh") ? "zh" : "en";
 }
 
-export default class VaultWaystationPlugin extends Plugin {
+export default class VaultWipPlugin extends Plugin {
   private engine: Engine | null = null;
   private files: PluginFiles | null = null;
   private currentValues: Config | null = null;
   private configError: string | null = null;
   private timerId: number | null = null;
   private statusBar: HTMLElement | null = null;
-  private settingTab: WaystationSettingTab | null = null;
-  private readonly views = new Set<WaystationView>();
+  private settingTab: WipSettingTab | null = null;
+  private readonly views = new Set<WipView>();
 
   override async onload(): Promise<void> {
     this.statusBar = this.addStatusBarItem();
@@ -46,7 +46,7 @@ export default class VaultWaystationPlugin extends Plugin {
     await this.reload();
 
     this.registerView(VIEW_TYPE, (leaf) => {
-      const view = new WaystationView(leaf, this);
+      const view = new WipView(leaf, this);
       this.views.add(view);
       return view;
     });
@@ -54,7 +54,7 @@ export default class VaultWaystationPlugin extends Plugin {
     this.addRibbonIcon("radio-tower", t("{name}：查看各端状态", { name: PLUGIN_NAME }), () => {
       void this.activateView();
     });
-    this.settingTab = new WaystationSettingTab(this.app, this);
+    this.settingTab = new WipSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
 
     // 采集与上报分开：这些时机只影响「什么时候报一次」，报什么由采集决定。
@@ -339,7 +339,7 @@ export default class VaultWaystationPlugin extends Plugin {
   }
 
   /** 视图在打开与关闭时登记自己，好让状态变化能推过去。 */
-  forgetView(view: WaystationView): void {
+  forgetView(view: WipView): void {
     this.views.delete(view);
   }
 

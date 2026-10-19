@@ -9,7 +9,7 @@ import type { EngineSnapshot, RelayStatus } from "./core/engine.js";
 import { PLUGIN_NAME, t } from "./core/i18n.js";
 import { refName, remoteSummary } from "./core/remote.js";
 import type { StatusPayload } from "./core/payload.js";
-import type VaultWaystationPlugin from "./main.js";
+import type VaultWipPlugin from "./main.js";
 
 export const VIEW_TYPE = "vault-wip-view";
 
@@ -41,7 +41,7 @@ function tabLabel(name: TabName): string {
 /** 清单里最多显示几个文件名，免得一屏都是路径。 */
 const MAX_LISTED_PATHS = 20;
 
-export class WaystationView extends ItemView {
+export class WipView extends ItemView {
   private tab: TabName = "overview";
   private readonly panes = new Map<TabName, HTMLElement>();
   private readonly tabButtons = new Map<TabName, HTMLButtonElement>();
@@ -52,7 +52,7 @@ export class WaystationView extends ItemView {
 
   constructor(
     leaf: WorkspaceLeaf,
-    private readonly plugin: VaultWaystationPlugin,
+    private readonly plugin: VaultWipPlugin,
   ) {
     super(leaf);
   }

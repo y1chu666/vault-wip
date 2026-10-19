@@ -8,7 +8,7 @@ import type { Config, TransportLevel } from "./core/config.js";
 import { isLanguageChoice, parseConfig, serializeConfig } from "./core/config.js";
 import { t } from "./core/i18n.js";
 import { readTextFile, writeTextFile } from "./core/storage.js";
-import type VaultWaystationPlugin from "./main.js";
+import type VaultWipPlugin from "./main.js";
 
 /** 把只读的取值类型变成可写，供设置页在副本上改一项。 */
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -48,12 +48,12 @@ const INTERVAL_CHOICES = [5, 15, 30, 60, 300] as const;
 /** 提醒重提的档位（秒），0 表示关闭。 */
 const REPEAT_CHOICES = [0, 300, 600, 1800, 3600] as const;
 
-export class WaystationSettingTab extends PluginSettingTab {
+export class WipSettingTab extends PluginSettingTab {
   private credential = "";
 
   constructor(
     app: App,
-    private readonly plugin: VaultWaystationPlugin,
+    private readonly plugin: VaultWipPlugin,
   ) {
     super(app, plugin);
   }
@@ -392,7 +392,7 @@ export class WaystationSettingTab extends PluginSettingTab {
 }
 
 /** 写回之后重新读一遍再交给引擎：解析器是唯一的把关者，界面不另设一套校验。 */
-async function loadAndApply(plugin: VaultWaystationPlugin): Promise<void> {
+async function loadAndApply(plugin: VaultWipPlugin): Promise<void> {
   const path = plugin.configPath();
   if (path === null) {
     return;
