@@ -212,7 +212,7 @@ describe("采集与上报", () => {
 
   it("中继指出既有记录时按它推进后重报", async () => {
     const env = await fixture();
-    const key = DeviceKey.generate();
+    const key = await deviceKeyOf(env.files);
     const existing = peerRecord({
       key,
       contentKey: await contentKeyOf(env.files),
@@ -236,9 +236,64 @@ describe("采集与上报", () => {
     expect(env.snapshot().sequence).toBe(10);
   });
 
+  it("中继给出不属于本机的既有序号时不采信", async () => {
+    const env = await fixture();
+    const other = DeviceKey.generate();
+    const existing = peerRecord({
+      key: other,
+      contentKey: await contentKeyOf(env.files),
+      channelId: "aa".repeat(16),
+      sequence: 9,
+      collectedAt: "2023-11-14T22:15:23Z",
+      payload: statusContent("示例设备乙", []),
+    });
+
+    env.relay.reply = () => ({
+      status: 200,
+      body: { accepted: false, own: recordDTO(existing), records: [], revocations: [] },
+    });
+
+    await env.engine.tick("timer");
+
+    // 序号决定本机此后还能不能报上去，别人签下的记录不该牵动它。
+    expect(env.relay.requests.map((request) => request.body["sequence"])).toEqual([1]);
+    // 上报被拒，本机序号没有动过。
+    expect(env.snapshot().sequence).toBe(0);
+    expect(env.snapshot().diagnostics.events.join("\n")).toContain("不是本机签的");
+  });
+
+  it("中继给出的本设备既有序号核不过签名时不采信", async () => {
+    const env = await fixture();
+    const existing = peerRecord({
+      key: await deviceKeyOf(env.files),
+      contentKey: await contentKeyOf(env.files),
+      channelId: "aa".repeat(16),
+      sequence: 9,
+      collectedAt: "2023-11-14T22:15:23Z",
+      payload: statusContent("本机", []),
+    });
+    // 指纹是本机的，签名却不是：中继只要改动记录内容就会落到这一支。
+    const tampered = {
+      ...recordDTO(existing),
+      signature: Buffer.alloc(existing.signature.length).toString("base64"),
+    };
+
+    env.relay.reply = () => ({
+      status: 200,
+      body: { accepted: false, own: tampered, records: [], revocations: [] },
+    });
+
+    await env.engine.tick("timer");
+
+    expect(env.relay.requests.map((request) => request.body["sequence"])).toEqual([1]);
+    // 上报被拒，本机序号没有动过。
+    expect(env.snapshot().sequence).toBe(0);
+    expect(env.snapshot().diagnostics.events.join("\n")).toContain("不是本机签的");
+  });
+
   it("重报之后仍被拒就如实说明", async () => {
     const env = await fixture();
-    const key = DeviceKey.generate();
+    const key = await deviceKeyOf(env.files);
     const contentKey = await contentKeyOf(env.files);
     const make = (sequence: number): PeerRecord =>
       peerRecord({

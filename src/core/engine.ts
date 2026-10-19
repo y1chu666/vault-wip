@@ -614,7 +614,15 @@ export class Engine {
       if (reply.accepted) {
         accepted = true;
       } else if (reply.own !== null && reply.own.sequence >= sequence) {
-        if (nextSequence(reply.own.sequence) > MAX_SEQUENCE) {
+        const own = reply.own;
+        if (!this.ownsRecord(own, channelId)) {
+          // 序号决定本机此后能否继续上报，因此只认本机自己签下的那一条。
+          this.note(
+            t("中继 {relay} 回送的本设备既有序号不是本机签的，不予采信：请在诊断栏核对状态", {
+              relay: client.name,
+            }),
+          );
+        } else if (nextSequence(own.sequence) > MAX_SEQUENCE) {
           // 采信它会把本机计数顶到无法再加一的位置，此后一次也报不上去，连重置都会
           // 被立刻顶回来。这样的既有序号只会来自异常的中继，记一笔异常而不采信。
           this.note(
@@ -623,7 +631,7 @@ export class Engine {
             }),
           );
         } else {
-          highestOwn = Math.max(highestOwn ?? 0, reply.own.sequence);
+          highestOwn = Math.max(highestOwn ?? 0, own.sequence);
         }
       }
 
@@ -656,6 +664,35 @@ export class Engine {
 
     await this.persist();
     return highestOwn;
+  }
+
+  /**
+   * 核对中继回送的「本设备既有序号」是否出自本机。
+   *
+   * 序号决定本机此后能不能继续上报，采信之前必须确认这条记录真的是本机签的：
+   * 中继只负责搬运，它给出的记录核不过签名、或者根本不属于本机，就不该影响本机
+   * 的计数。
+   */
+  private ownsRecord(record: PeerRecord, channelId: string): boolean {
+    if (record.fingerprint !== this.deviceKey.fingerprint) {
+      return false;
+    }
+    try {
+      return verifyRecord(
+        record.publicKey,
+        {
+          fingerprint: record.fingerprint,
+          channel: channelId,
+          sequence: record.sequence,
+          collectedAt: parseRfc3339(record.collectedAt),
+          payload: record.payload,
+        },
+        record.signature,
+      );
+    } catch {
+      // 时间读不出来就等同于核不过。
+      return false;
+    }
   }
 
   /** 解开并核对来自某台中继的对端记录，再交给合并逻辑。 */

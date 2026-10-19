@@ -370,6 +370,8 @@ export const ENGLISH = {
     "the local counter has reached the representable ceiling ({limit}); nothing is reported this time: check the state in the diagnostics pane and then reset the local counter",
   "中继 {relay}：尚未注册本仓库，请先填写注册凭证并注册":
     "relay {relay}: this vault is not registered yet; fill in the registration credential and register first",
+  "中继 {relay} 回送的本设备既有序号不是本机签的，不予采信：请在诊断栏核对状态":
+    "the stored sequence relay {relay} sent back for this device was not signed by this device, so it is not taken: check the state in the diagnostics pane",
   "中继 {relay} 给出的本设备既有序号已达可表示上界，不予采信：请在诊断栏核对状态":
     "the existing sequence relay {relay} gives for this device has reached the representable ceiling, so it is not taken: check the state in the diagnostics pane",
   "中继 {relay} 回送的内容里有 {count} 条读不出来，已放弃：{detail}":
