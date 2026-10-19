@@ -83,6 +83,54 @@ const COLLECT_TIMEOUT_MS = 10_000;
  */
 const SAFE_CONFIG_ARGS: readonly string[] = ["-c", "core.fsmonitor=false", "-c", "diff.external="];
 
+/**
+ * 列出仓库本地配置里定义过的过滤器驱动名。
+ *
+ * 过滤器是另一条执行程序的路子，而且不能靠列举固定的名字堵住：驱动名由仓库自定，
+ * 属性文件随仓库流转，一旦属性选中某个驱动，git 比对工作区文件时就会跑起该驱动
+ * 指定的程序。因此先问一句仓库里定义过哪些驱动，再逐个压掉。
+ *
+ * 只取本地配置：全局配置是本机自己的内容，不属于随仓库流转的东西。
+ */
+async function localFilterDrivers(runner: CommandRunner, cwd: string): Promise<string[]> {
+  const result = await runner(["config", "--local", "--name-only", "--get-regexp", "^filter\\."], cwd);
+  if (result.code !== 0) {
+    // 一条过滤器都没有时 git 以非零退出，这不是采集失败。
+    return [];
+  }
+
+  const names = new Set<string>();
+  for (const key of decodePaths(result.stdout).split("\n")) {
+    // 键形如 filter.<驱动名>.<项>；驱动名本身可以含点，因此只剥掉首尾两段。
+    const parts = key.trim().split(".");
+    if (parts.length < 3 || parts[0] !== "filter") {
+      continue;
+    }
+    const name = parts.slice(1, -1).join(".");
+    if (name !== "") {
+      names.add(name);
+    }
+  }
+  return [...names];
+}
+
+/**
+ * 把仓库自己定义的过滤器逐个清空。
+ *
+ * 清空取值而不改仓库文件：命令行取值的优先级高于仓库配置，因此仓库里怎么写都不会
+ * 被调用；同时把驱动标为非必需，免得压掉取值之后 git 因「驱动不见了」直接报错。
+ */
+async function filterOverrideArgs(runner: CommandRunner, cwd: string): Promise<string[]> {
+  const args: string[] = [];
+  for (const name of await localFilterDrivers(runner, cwd)) {
+    for (const slot of ["clean", "process", "smudge"]) {
+      args.push("-c", `filter.${name}.${slot}=`);
+    }
+    args.push("-c", `filter.${name}.required=false`);
+  }
+  return args;
+}
+
 /** 默认的命令执行方式：不经外壳，直接调用可执行文件。 */
 export function createCommandRunner(gitPath: string, timeoutMs = COLLECT_TIMEOUT_MS): CommandRunner {
   const executable = gitPath === "" ? "git" : gitPath;
@@ -146,7 +194,10 @@ export async function gitVersion(runner: CommandRunner, cwd: string): Promise<st
  * 假冲突的判定只用于措辞：它依赖带行尾过滤的差异输出，因此仅在确实存在改动时才多跑两次 git。
  */
 export async function collectStatus(runner: CommandRunner, cwd: string): Promise<CollectedStatus> {
-  const statusResult = await runner(["status", "--porcelain=v2", "-z", "--branch"], cwd);
+  // 仓库自己定义的过滤器先取一次，随后每条命令都据此把它们压掉。
+  const safe = [...SAFE_CONFIG_ARGS, ...(await filterOverrideArgs(runner, cwd))];
+
+  const statusResult = await runner([...safe, "status", "--porcelain=v2", "-z", "--branch"], cwd);
   if (statusResult.code !== 0) {
     throw new CollectError(`读取仓库状态失败：${firstLine(statusResult.stderr)}`);
   }
@@ -160,7 +211,7 @@ export async function collectStatus(runner: CommandRunner, cwd: string): Promise
 
   let suspectFiles: string[] = [];
   if (changes.length > 0) {
-    suspectFiles = await detectFalseConflicts(runner, cwd, changes);
+    suspectFiles = await detectFalseConflicts(runner, cwd, changes, safe);
   }
 
   return {
@@ -184,9 +235,10 @@ async function detectFalseConflicts(
   runner: CommandRunner,
   cwd: string,
   changes: readonly Change[],
+  safe: readonly string[],
 ): Promise<string[]> {
-  const unstaged = parseRawDiff((await runDiff(runner, cwd, false)).stdout);
-  const staged = parseRawDiff((await runDiff(runner, cwd, true)).stdout);
+  const unstaged = parseRawDiff((await runDiff(runner, cwd, false, safe)).stdout);
+  const staged = parseRawDiff((await runDiff(runner, cwd, true, safe)).stdout);
   const differed = new Set<string>([...unstaged, ...staged].map((entry) => normalizePath(entry.path)));
 
   const suspects = new Set<string>();
@@ -204,10 +256,15 @@ async function detectFalseConflicts(
   return [...suspects].sort();
 }
 
-function runDiff(runner: CommandRunner, cwd: string, staged: boolean): Promise<CommandResult> {
+function runDiff(
+  runner: CommandRunner,
+  cwd: string,
+  staged: boolean,
+  safe: readonly string[],
+): Promise<CommandResult> {
   // --no-ext-diff 显式关掉外部差异程序：raw 格式本就用不到它，写在这里是为了
   // 即便日后改动了参数，也不会顺手把仓库配置里的程序带上。
-  const args = ["diff", "--raw", "-z", "--ignore-cr-at-eol", "--no-ext-diff"];
+  const args = [...safe, "diff", "--raw", "-z", "--ignore-cr-at-eol", "--no-ext-diff"];
   if (staged) {
     args.push("--cached");
   }

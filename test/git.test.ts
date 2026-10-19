@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -195,16 +196,27 @@ describe("normalizePath", () => {
 });
 
 describe("collectStatus", () => {
+  /** 去掉前置的取值参数，只留子命令本身，便于按命令给出输出。 */
+  function withoutConfigArgs(args: readonly string[]): string {
+    let index = 0;
+    while (args[index] === "-c") {
+      index += 2;
+    }
+    return args.slice(index).join(" ");
+  }
+
   /** 按调用参数返回预先准备的输出。 */
   function stubRunner(overrides: Record<string, CommandResult> = {}): CommandRunner {
     const defaults: Record<string, CommandResult> = {
+      // 仓库里没有定义过滤器时，这条命令以非零退出。
+      "config --local --name-only --get-regexp ^filter\\.": result(Buffer.alloc(0), 1),
       "status --porcelain=v2 -z --branch": result(statusFixture),
       "diff --raw -z --ignore-cr-at-eol --no-ext-diff": result(unstagedDiffFixture),
       "diff --raw -z --ignore-cr-at-eol --no-ext-diff --cached": result(stagedDiffFixture),
     };
     const table = { ...defaults, ...overrides };
 
-    return (args) => Promise.resolve(table[args.join(" ")] ?? result(Buffer.alloc(0)));
+    return (args) => Promise.resolve(table[withoutConfigArgs(args)] ?? result(Buffer.alloc(0)));
   }
 
   it("给出归一后的改动清单与假冲突清单", async () => {
@@ -240,8 +252,12 @@ describe("collectStatus", () => {
   it("没有改动时不再多跑两次差异命令", async () => {
     const calls: string[] = [];
     const runner: CommandRunner = (args) => {
-      calls.push(args.join(" "));
-      if (args[0] === "status") {
+      calls.push(withoutConfigArgs(args));
+      const command = withoutConfigArgs(args);
+      if (command.startsWith("config ")) {
+        return Promise.resolve(result(Buffer.alloc(0), 1));
+      }
+      if (command.startsWith("status ")) {
         return Promise.resolve(result(nulJoin(["# branch.head main"])));
       }
       return Promise.reject(new Error(`不该调用：${args.join(" ")}`));
@@ -250,7 +266,38 @@ describe("collectStatus", () => {
     const collected = await collectStatus(runner, "/repo");
 
     expect(collected.changes).toEqual([]);
-    expect(calls).toEqual(["status --porcelain=v2 -z --branch"]);
+    // 取一次仓库自己的过滤器定义，随后只跑一次状态命令。
+    expect(calls).toEqual([
+      "config --local --name-only --get-regexp ^filter\\.",
+      "status --porcelain=v2 -z --branch",
+    ]);
+  });
+
+  it("仓库定义的过滤器逐个压掉", async () => {
+    // 属性文件随仓库流转，驱动名由仓库自定，因此这里不能靠列举固定名字：
+    // 先把仓库里定义过的驱动取出来，随后每条命令都把它们清空。
+    const seen: string[][] = [];
+    const runner: CommandRunner = (args) => {
+      seen.push([...args]);
+      const command = withoutConfigArgs(args);
+      if (command.startsWith("config ")) {
+        return Promise.resolve(
+          result(Buffer.from("filter.evil.clean\nfilter.evil.x.process\nfilter.evil.required\n", "utf8")),
+        );
+      }
+      return Promise.resolve(result(nulJoin(["# branch.head main"])));
+    };
+
+    const collected = await collectStatus(runner, "/repo");
+
+    expect(collected.branch).toBe("main");
+    const status = seen.find((args) => withoutConfigArgs(args).startsWith("status ")) ?? [];
+    expect(status).toContain("filter.evil.clean=");
+    expect(status).toContain("filter.evil.process=");
+    expect(status).toContain("filter.evil.smudge=");
+    expect(status).toContain("filter.evil.required=false");
+    // 驱动名里的点属于驱动名的一部分，不能当成层级分隔。
+    expect(status).toContain("filter.evil.x.clean=");
   });
 
   it("把处于合并冲突的文件单列", async () => {
@@ -282,6 +329,18 @@ describe("真实仓库上的采集", () => {
   let directory = "";
 
   const git = createCommandRunner("");
+
+  /** 直接调用 git，不带任何压制：用来确认待压制的向量本身是活的。 */
+  const rawGit = (cwd: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      execFile("git", ["status", "--porcelain=v2"], { cwd }, (error) => {
+        if (error === null) {
+          resolve();
+          return;
+        }
+        reject(error instanceof Error ? error : new Error("直接调用 git 失败"));
+      });
+    });
 
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), "waystation-collect-"));
@@ -361,6 +420,44 @@ describe("真实仓库上的采集", () => {
       await git(["init", "-q", "."], root);
       await git(["config", "core.fsmonitor", hook], root);
       await writeFile(join(root, "a.md"), "alpha\n");
+
+      await collectStatus(git, root);
+
+      await expect(readFile(marker)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("只读查询不执行仓库配置里的过滤器", async () => {
+    if (!available) {
+      return;
+    }
+
+    // 属性文件与驱动名都由仓库给出，且随仓库一起流转，因此采集必须自己把仓库
+    // 定义过的过滤器压掉，而不是等着仓库不用它们。
+    const root = await mkdtemp(join(tmpdir(), "waystation-filter-"));
+    try {
+      const marker = join(root, "marker.txt");
+      const hook = join(root, "hook.sh");
+      await git(["init", "-q", "."], root);
+      await writeFile(join(root, "a.md"), "alpha\nbeta\n");
+      await git(["add", "-A"], root);
+      await git(["-c", "user.email=dev@example.invalid", "-c", "user.name=device-a", "commit", "-q", "-m", "初始化"], root);
+
+      // 提交之后再让仓库带上过滤器：先前那次 git add 自己就会执行它，测不出采集的行为。
+      await writeFile(hook, `#!/bin/sh\necho 执行了 >> "${marker}"\ncat\n`, { mode: 0o755 });
+      await git(["config", "filter.evil.clean", hook], root);
+      await git(["config", "filter.evil.process", hook], root);
+      await writeFile(join(root, ".gitattributes"), "*.md filter=evil\n");
+      // 改动前后等长：git 只凭文件大小就能判定改动时不读内容，也就不会跑过滤器，
+      // 这条向量正落在需要读内容的那一侧。
+      await writeFile(join(root, "a.md"), "alpha\nBETA\n");
+
+      // 先确认这条向量确实是活的：不加任何压制时，仓库指定的程序会被跑起来。
+      await rawGit(root);
+      expect(await readFile(marker)).toBeTruthy();
+      await rm(marker);
 
       await collectStatus(git, root);
 
