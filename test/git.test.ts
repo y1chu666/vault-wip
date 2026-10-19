@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -208,8 +208,9 @@ describe("collectStatus", () => {
   /** 按调用参数返回预先准备的输出。 */
   function stubRunner(overrides: Record<string, CommandResult> = {}): CommandRunner {
     const defaults: Record<string, CommandResult> = {
-      // 仓库里没有定义过滤器时，这条命令以非零退出。
-      "config --local --name-only --get-regexp ^filter\\.": result(Buffer.alloc(0), 1),
+      // 仓库里没有定义过滤器时，这两条命令以非零退出。
+      "config --local --includes --name-only --get-regexp ^filter\\.": result(Buffer.alloc(0), 1),
+      "config --worktree --includes --name-only --get-regexp ^filter\\.": result(Buffer.alloc(0), 1),
       "status --porcelain=v2 -z --branch": result(statusFixture),
       "diff --raw -z --ignore-cr-at-eol --no-ext-diff": result(unstagedDiffFixture),
       "diff --raw -z --ignore-cr-at-eol --no-ext-diff --cached": result(stagedDiffFixture),
@@ -266,9 +267,10 @@ describe("collectStatus", () => {
     const collected = await collectStatus(runner, "/repo");
 
     expect(collected.changes).toEqual([]);
-    // 取一次仓库自己的过滤器定义，随后只跑一次状态命令。
+    // 仓库自己的配置问两处（本体含 include、工作区配置），随后只跑一次状态命令。
     expect(calls).toEqual([
-      "config --local --name-only --get-regexp ^filter\\.",
+      "config --local --includes --name-only --get-regexp ^filter\\.",
+      "config --worktree --includes --name-only --get-regexp ^filter\\.",
       "status --porcelain=v2 -z --branch",
     ]);
   });
@@ -455,6 +457,85 @@ describe("真实仓库上的采集", () => {
       await writeFile(join(root, "a.md"), "alpha\nBETA\n");
 
       // 先确认这条向量确实是活的：不加任何压制时，仓库指定的程序会被跑起来。
+      await rawGit(root);
+      expect(await readFile(marker)).toBeTruthy();
+      await rm(marker);
+
+      await collectStatus(git, root);
+
+      await expect(readFile(marker)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("只读查询不执行 include 进来的过滤器", async () => {
+    if (!available) {
+      return;
+    }
+
+    // 驱动定义可以写在被 include 的文件里，而那个文件也能随仓库一起流转；只问
+    // .git/config 本体是问不到的，因此这一处要单独盯住。
+    const root = await mkdtemp(join(tmpdir(), "waystation-filter-include-"));
+    try {
+      const marker = join(root, "marker.txt");
+      const hook = join(root, "hook.sh");
+      await git(["init", "-q", "."], root);
+      await writeFile(join(root, "a.md"), "alpha\nbeta\n");
+      await git(["add", "-A"], root);
+      await git(
+        ["-c", "user.email=dev@example.invalid", "-c", "user.name=device-a", "commit", "-q", "-m", "初始化"],
+        root,
+      );
+
+      await writeFile(hook, `#!/bin/sh\necho 执行了 >> "${marker}"\ncat\n`, { mode: 0o755 });
+      const included = join(root, "nested", "filters.conf");
+      await mkdir(dirname(included), { recursive: true });
+      await writeFile(included, `[filter "evil"]\n\tclean = ${hook}\n\tprocess = ${hook}\n`);
+      await appendFile(join(root, ".git", "config"), `\n[include]\n\tpath = ${included}\n`);
+      await writeFile(join(root, ".gitattributes"), "*.md filter=evil\n");
+      await writeFile(join(root, "a.md"), "alpha\nBETA\n");
+
+      await rawGit(root);
+      expect(await readFile(marker)).toBeTruthy();
+      await rm(marker);
+
+      await collectStatus(git, root);
+
+      await expect(readFile(marker)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("只读查询不执行工作区配置里的过滤器", async () => {
+    if (!available) {
+      return;
+    }
+
+    // 开启工作区配置之后，驱动定义可以落在 .git/config.worktree 里；那时只问
+    // 本地配置同样问不到，因此这一处也要单独盯住。
+    const root = await mkdtemp(join(tmpdir(), "waystation-filter-worktree-"));
+    try {
+      const marker = join(root, "marker.txt");
+      const hook = join(root, "hook.sh");
+      await git(["init", "-q", "."], root);
+      await writeFile(join(root, "a.md"), "alpha\nbeta\n");
+      await git(["add", "-A"], root);
+      await git(
+        ["-c", "user.email=dev@example.invalid", "-c", "user.name=device-a", "commit", "-q", "-m", "初始化"],
+        root,
+      );
+
+      await writeFile(hook, `#!/bin/sh\necho 执行了 >> "${marker}"\ncat\n`, { mode: 0o755 });
+      await git(["config", "extensions.worktreeConfig", "true"], root);
+      await writeFile(
+        join(root, ".git", "config.worktree"),
+        `[filter "evil"]\n\tclean = ${hook}\n\tprocess = ${hook}\n`,
+      );
+      await writeFile(join(root, ".gitattributes"), "*.md filter=evil\n");
+      await writeFile(join(root, "a.md"), "alpha\nBETA\n");
+
       await rawGit(root);
       expect(await readFile(marker)).toBeTruthy();
       await rm(marker);

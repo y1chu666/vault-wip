@@ -85,34 +85,48 @@ const COLLECT_TIMEOUT_MS = 10_000;
 const SAFE_CONFIG_ARGS: readonly string[] = ["-c", "core.fsmonitor=false", "-c", "diff.external="];
 
 /**
- * 列出仓库本地配置里定义过的过滤器驱动名。
+ * 列出仓库自己的配置里定义过的过滤器驱动名。
  *
  * 过滤器是另一条执行程序的路子，而且不能靠列举固定的名字堵住：驱动名由仓库自定，
  * 属性文件随仓库流转，一旦属性选中某个驱动，git 比对工作区文件时就会跑起该驱动
  * 指定的程序。因此先问一句仓库里定义过哪些驱动，再逐个压掉。
  *
- * 只取本地配置：全局配置是本机自己的内容，不属于随仓库流转的东西。
+ * 仓库自己的配置有几处来源：`.git/config` 本体、它用 include 引来的文件，以及开启
+ * 工作区配置之后的 `.git/config.worktree`（后者同样可以再 include）。不问 include
+ * 与工作区这两处，写在那里的驱动就压不住——而 git 比对内容时读的是生效配置，
+ * 漏掉的照旧会被执行。因此两处都问，取并集。全局与系统配置属于本机自己的内容，
+ * 不随仓库流转，不在此列。
  */
 async function localFilterDrivers(runner: CommandRunner, cwd: string): Promise<string[]> {
-  const result = await runner(["config", "--local", "--name-only", "--get-regexp", "^filter\\."], cwd);
-  if (result.code !== 0) {
-    // 一条过滤器都没有时 git 以非零退出，这不是采集失败。
-    return [];
-  }
-
   const names = new Set<string>();
-  for (const key of decodePaths(result.stdout).split("\n")) {
-    // 键形如 filter.<驱动名>.<项>；驱动名本身可以含点，因此只剥掉首尾两段。
-    const parts = key.trim().split(".");
-    if (parts.length < 3 || parts[0] !== "filter") {
+  for (const scope of ["--local", "--worktree"]) {
+    const result = await runner(
+      ["config", scope, "--includes", "--name-only", "--get-regexp", "^filter\\."],
+      cwd,
+    );
+    if (result.code !== 0) {
+      // 一条过滤器都没有时 git 以非零退出；没开启工作区配置时 --worktree 也会如此。
       continue;
     }
-    const name = parts.slice(1, -1).join(".");
-    if (name !== "") {
-      names.add(name);
+    for (const key of decodePaths(result.stdout).split("\n")) {
+      const name = driverNameOf(key);
+      if (name !== null) {
+        names.add(name);
+      }
     }
   }
   return [...names];
+}
+
+/** 从 `filter.<驱动名>.<项>` 这样的键里剥出驱动名；不成形时返回 null。 */
+function driverNameOf(key: string): string | null {
+  // 驱动名本身可以含点，因此只剥掉首尾两段。
+  const parts = key.trim().split(".");
+  if (parts.length < 3 || parts[0] !== "filter") {
+    return null;
+  }
+  const name = parts.slice(1, -1).join(".");
+  return name === "" ? null : name;
 }
 
 /**
