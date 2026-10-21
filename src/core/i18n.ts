@@ -124,6 +124,7 @@ export const ENGLISH = {
   "本设备": "This device",
   "本机改动": "Local changes",
   "各端改动": "Other devices",
+  "点击查看明细": "Click for details",
   "尚无可用的对端记录。": "No peer records yet.",
   "对端设备": "Peers",
   "冲突": "Conflicts",

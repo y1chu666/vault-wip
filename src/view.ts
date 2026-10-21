@@ -189,7 +189,11 @@ export class WipView extends ItemView {
       pane.createDiv({ text: t("尚无可用的对端记录。") });
     } else {
       for (const peer of snapshot.peers) {
-        overviewPeer(pane, peer);
+        overviewPeer(pane, peer, () => {
+          this.tab = "peers";
+          this.updateTabs();
+          this.render();
+        });
       }
     }
 
@@ -618,19 +622,21 @@ function conflictLine(parent: HTMLElement, conflict: Conflict): void {
 }
 
 /** 概览里的一台对端：只看规模与时间，明细展开才出现。 */
-function overviewPeer(parent: HTMLElement, peer: DeviceStatus): void {
-  const block = parent.createDiv({ cls: "vault-wip-peer" });
+function overviewPeer(parent: HTMLElement, peer: DeviceStatus, onOpen: () => void): void {
+  const block = parent.createDiv({
+    cls: "vault-wip-peer vault-wip-peer-link",
+    attr: { title: t("点击查看明细") },
+  });
   const head = block.createDiv({ cls: "vault-wip-peer-head" });
   head.createDiv({ cls: `vault-wip-dot ${freshnessClass(peer.collectedAt)}` });
   const title = head.createDiv({ cls: "vault-wip-peer-title" });
   title.createDiv({ cls: "vault-wip-peer-name", text: displayName(peer) });
-  title.createDiv({ cls: "vault-wip-peer-meta", text: relativeTime(peer.collectedAt) });
-  table(block, [
-    [t("改动文件"), String(peer.payload.count)],
-    [t("清单是否截断"), peer.payload.truncated ? t("是") : t("否")],
-  ]);
+  title.createDiv({
+    cls: "vault-wip-peer-meta",
+    text: `${String(peer.payload.count)} · ${relativeTime(peer.collectedAt)}`,
+  });
   kindChips(block, peer.payload);
-  groupedFiles(block, peer.payload.paths, peer.payload.kinds);
+  block.onclick = onOpen;
 }
 
 /** 一台对端的状态。 */

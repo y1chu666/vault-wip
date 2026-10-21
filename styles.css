@@ -367,3 +367,28 @@
   font-size: 0.82em;
   color: var(--text-muted);
 }
+
+/* 概览的对端卡片只给摘要，点开才进入明细。 */
+.vault-wip-peer-link {
+  cursor: pointer;
+}
+
+.vault-wip-peer-link:hover {
+  border-color: var(--interactive-accent);
+}
+
+/* 安全板块：小节之间与按钮行都留出间隔，避免挤成一团。 */
+.vault-wip-security h4 {
+  margin-top: 1.5em;
+}
+
+.vault-wip-security > .vault-wip-table {
+  margin-bottom: 0.5em;
+}
+
+.vault-wip-security > .vault-wip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45em;
+  margin: 0.4em 0 1em;
+}
