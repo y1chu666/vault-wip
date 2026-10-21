@@ -15,7 +15,7 @@ export const NONCE_BYTES = 32;
 
 const REQUEST_CONTEXT = "wip-relay-request-v1";
 const RESPONSE_CONTEXT = "wip-relay-response-v1";
-const RECORD_CONTEXT = "wip-relay-record-v1";
+const RECORD_CONTEXT = "wip-relay-record-v2";
 
 /** 请求中参与签名的要素。 */
 export interface RequestElements {
