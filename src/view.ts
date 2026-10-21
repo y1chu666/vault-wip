@@ -158,8 +158,9 @@ export class WipView extends ItemView {
   }
 
   private fillOverview(pane: HTMLElement, snapshot: EngineSnapshot): void {
-    const self = heading(pane, t("本设备"));
-    table(self, [
+    overviewStats(pane, snapshot);
+    heading(pane, t("本设备"));
+    table(pane, [
       [t("名称"), snapshot.selfLabel === "" ? t("（未命名）") : snapshot.selfLabel],
       [t("指纹"), snapshot.selfFingerprint],
       [t("已上报序号"), String(snapshot.sequence)],
@@ -453,6 +454,22 @@ export class WipView extends ItemView {
       button.classList.toggle("is-active", name === this.tab);
     }
   }
+}
+
+/** 概览顶部的四个数字：一眼看清当前处境的规模。 */
+function overviewStats(parent: HTMLElement, snapshot: EngineSnapshot): void {
+  const grid = parent.createDiv({ cls: "vault-wip-stats" });
+  stat(grid, String(snapshot.local?.count ?? 0), t("本机改动"));
+  stat(grid, String(snapshot.peers.length), t("对端设备"));
+  stat(grid, String(snapshot.conflicts.length), t("冲突"));
+  stat(grid, String(snapshot.relays.filter((relay) => relay.lastFailure === null).length), t("可用中继"));
+}
+
+/** 一个数字配一行说明。 */
+function stat(parent: HTMLElement, value: string, label: string): void {
+  const box = parent.createDiv({ cls: "vault-wip-stat" });
+  box.createDiv({ cls: "vault-wip-stat-value", text: value });
+  box.createDiv({ cls: "vault-wip-stat-label", text: label });
 }
 
 /** 小节标题。 */

@@ -114,6 +114,9 @@ export const ENGLISH = {
   // 状态视图：概览。
   "本设备": "This device",
   "本机改动": "Local changes",
+  "对端设备": "Peers",
+  "冲突": "Conflicts",
+  "可用中继": "Relays online",
   "与对端的冲突": "Conflicts with other devices",
   "本设备已退役：需要重新注册才能继续使用。":
     "This device has been retired. Register again before using it.",
