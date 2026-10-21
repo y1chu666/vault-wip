@@ -592,7 +592,7 @@ function suspectNotes(parent: HTMLElement, payload: StatusPayload): void {
   }
   const parts: string[] = [];
   if (payload.suspectFiles.length > 0) {
-    parts.push(t("{count} 个文件的差异疑似只是行尾或权限位", { count: payload.suspectFiles.length }));
+    parts.push(t("{count} 个文件的差异仅在行尾或权限位", { count: payload.suspectFiles.length }));
   }
   if (payload.conflictFiles.length > 0) {
     parts.push(t("{count} 个文件留有合并冲突的痕迹", { count: payload.conflictFiles.length }));
@@ -604,7 +604,7 @@ function suspectNotes(parent: HTMLElement, payload: StatusPayload): void {
 function conflictLine(parent: HTMLElement, conflict: Conflict): void {
   const names = conflict.peers.map((peer) => peer.name).join(t("、"));
   const caution =
-    conflict.localSuspect || conflict.peerSuspect ? t("（其中一边的差异疑似只是行尾或权限位）") : "";
+    conflict.localSuspect || conflict.peerSuspect ? t("（其中一边的差异仅在行尾或权限位）") : "";
   parent.createDiv({ text: t("{path}：与 {names} 的重叠{caution}", { path: conflict.path, names, caution }) });
 }
 

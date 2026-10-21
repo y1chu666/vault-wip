@@ -61,10 +61,10 @@ export const ENGLISH = {
   "{subject}在本地与{names}上都有未提交改动，提交或拉取之前请先确认。{hint}":
     "{subject} has uncommitted changes both here and on {names}. Please confirm before committing or pulling.{hint}",
   "「{path}」等 {count} 个文件": '"{path}" and {count} files in total',
-  "本地这边的差异疑似只是行尾或权限位，可能无需处理。":
-    " The difference on this side looks like line endings or permission bits only; it may need no action.",
-  "对端那边的差异疑似只是行尾或权限位，可能无需处理。":
-    " The difference on the other side looks like line endings or permission bits only; it may need no action.",
+  "本地这边的差异仅在行尾或权限位。":
+    " The difference on this side is only in line endings or permission bits.",
+  "对端那边的差异仅在行尾或权限位。":
+    " The difference on the other side is only in line endings or permission bits.",
   "对端有未提交改动": "Another device has uncommitted changes",
   "{described}，开始编辑之前请先留意。": "{described}. Please keep that in mind before you start editing.",
   "{name}有 {count} 处未提交改动": "{name} has {count} uncommitted changes",
@@ -147,12 +147,12 @@ export const ENGLISH = {
   "记录内容中的改动类型与文件清单长度不一致": "Change kinds in the record must match the path list length",
   "记录内容中含有不认识的改动类型": "The record contains an unknown change kind",
   "另有 {count} 个文件未列出。": "{count} more files are not listed.",
-  "{count} 个文件的差异疑似只是行尾或权限位":
-    "The differences in {count} files look like line endings or permission bits only",
+  "{count} 个文件的差异仅在行尾或权限位":
+    "The difference in {count} files is only in line endings or permission bits",
   "{count} 个文件留有合并冲突的痕迹": "{count} files still hold traces of a merge conflict",
   "{path}：与 {names} 的重叠{caution}": "{path}: overlaps with {names}{caution}",
-  "（其中一边的差异疑似只是行尾或权限位）":
-    " (the difference on one side looks like line endings or permission bits only)",
+  "（其中一边的差异仅在行尾或权限位）":
+    " (the difference on one side is only in line endings or permission bits)",
 
   // 状态视图：中继。
   "尚未配置中继：请在插件设置里添加一台。": "No relay is configured yet. Add one in the plugin settings.",
