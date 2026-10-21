@@ -267,7 +267,7 @@ export class WipView extends ItemView {
       ),
     });
     const countRow = pane.createDiv({ cls: "vault-wip-actions" });
-    const resetButton = countRow.createEl("button", { text: t("重置本机计数") });
+    const resetButton = countRow.createEl("button", { cls: "mod-warning", text: t("重置本机计数") });
     resetButton.onclick = () => {
       if (!this.confirmResetSequence) {
         this.confirmResetSequence = true;
@@ -397,7 +397,7 @@ export class WipView extends ItemView {
 
     heading(pane, t("本设备"));
     const retireRow = pane.createDiv({ cls: "vault-wip-actions" });
-    const retireButton = retireRow.createEl("button", { text: t("退役本设备") });
+    const retireButton = retireRow.createEl("button", { cls: "mod-warning", text: t("退役本设备") });
     retireButton.style.color = "var(--text-error)";
     retireButton.onclick = () => {
       if (!this.confirmRetire) {
