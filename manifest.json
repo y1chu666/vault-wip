@@ -1,7 +1,7 @@
 {
   "id": "vault-wip",
   "name": "Vault WIP",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "minAppVersion": "1.8.7",
   "description": "Warns you before you start editing when another device still has uncommitted Git changes in the same vault.",
   "author": "y1chu",

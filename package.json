@@ -1,6 +1,6 @@
 {
   "name": "vault-wip",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "license": "Apache-2.0",
   "description": "Obsidian 插件：多端交替使用同一 Git 仓库时，互相感知未提交改动",
