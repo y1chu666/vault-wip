@@ -11,3 +11,6 @@ main.js
 .idea/
 .vscode/
 *.swp
+
+# 测试覆盖率产物
+coverage/
