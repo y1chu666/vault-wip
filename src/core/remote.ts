@@ -155,7 +155,7 @@ export function remoteSummary(result: RemoteQueryResult | null): string {
         ahead: result.ahead,
       });
     case "unfetched":
-      return t("远端分支指向本机还不认识的提交，可以先拉取一次");
+      return t("远端分支上有本机尚未获取的提交，无法比较");
     case "missing":
       return t("远端上没有这个分支：{ref}", { ref: refName(result) });
     case "no-branch":

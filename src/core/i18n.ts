@@ -588,7 +588,7 @@ export const ENGLISH = {
   "远端有 {count} 个提交本机还没有": "the remote has {count} commits this machine does not have yet",
   "本地与远端已经分开：远端有 {behind} 个本机没有，本机有 {ahead} 个尚未推上去":
     "this machine and the remote have parted ways: the remote has {behind} this machine lacks, and this machine has {ahead} not pushed yet",
-  "远端分支指向本机还不认识的提交，可以先拉取一次":
+  "远端分支上有本机尚未获取的提交，无法比较":
     "the remote branch points at a commit this machine does not know yet; pulling once will bring it over",
   "远端上没有这个分支：{ref}": "the remote has no such branch: {ref}",
   "当前不在任何分支上，无从比较远端":
