@@ -68,6 +68,7 @@ describe("parseConfig", () => {
       detectConflictFiles: true,
     });
     expect(config.notify.repeatSeconds).toBe(DEFAULT_REPEAT_SECONDS);
+    expect(config.notify.conflictRepeatSeconds).toBe(600);
     expect(config.relay).toHaveLength(1);
     expect(config.relay[0]).toEqual({
       name: "relay-a",

@@ -19,7 +19,7 @@ interface ConfigDraft {
   device: { name: string };
   channel: { alias: string };
   collect: Mutable<Config["collect"]>;
-  notify: { repeatSeconds: number };
+  notify: { repeatSeconds: number; conflictRepeatSeconds: number };
   ui: Mutable<Config["ui"]>;
   query: Mutable<Config["query"]>;
   relay: Mutable<Config["relay"][number]>[];
@@ -260,7 +260,25 @@ export class WipSettingTab extends PluginSettingTab {
           .setValue(String(config.notify.repeatSeconds))
           .onChange((value) => {
             this.edit((draft) => {
-              draft.notify = { repeatSeconds: Number(value) };
+              draft.notify = { ...draft.notify, repeatSeconds: Number(value) };
+            });
+          }),
+      );
+
+    new Setting(this.containerEl)
+      .setName(t("冲突仍在时的重提醒间隔"))
+      .setDesc(t("冲突持续存在时按此间隔再次提醒；0 表示每个冲突只提示一次。"))
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions(
+            dropdownOptions(REPEAT_CHOICES, (seconds) =>
+              seconds === 0 ? t("关闭重提醒") : t("{minutes} 分钟", { minutes: seconds / 60 }),
+            ),
+          )
+          .setValue(String(config.notify.conflictRepeatSeconds))
+          .onChange((value) => {
+            this.edit((draft) => {
+              draft.notify = { ...draft.notify, conflictRepeatSeconds: Number(value) };
             });
           }),
       );
@@ -387,7 +405,7 @@ export class WipSettingTab extends PluginSettingTab {
     if (current === null) {
       return;
     }
-    const draft = structuredClone(current) as ConfigDraft;
+    const draft = structuredClone(current) as unknown as ConfigDraft;
     mutate(draft);
     this.write(draft);
   }

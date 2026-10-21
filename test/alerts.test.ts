@@ -50,14 +50,26 @@ const conflict: Conflict = {
 
 describe("Alerts 的冲突提示", () => {
   it("新的冲突立刻提示，同一文件不重复提示", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
 
     expect(alerts.evaluate(input({ conflicts: [conflict] }))).toHaveLength(1);
     expect(alerts.evaluate(input({ conflicts: [conflict] }))).toEqual([]);
   });
 
+  it("冲突持续存在时，按间隔再次提醒", () => {
+    const alerts = new Alerts({ repeatSeconds: 0, conflictRepeatSeconds: 600 });
+
+    expect(alerts.evaluate(input({ conflicts: [conflict] }))).toHaveLength(1);
+    expect(
+      alerts.evaluate(input({ conflicts: [conflict], now: 1_700_000_000_000 + 300_000 })),
+    ).toEqual([]);
+    expect(
+      alerts.evaluate(input({ conflicts: [conflict], now: 1_700_000_000_000 + 600_000 })),
+    ).toHaveLength(1);
+  });
+
   it("冲突消失后再次出现，可以再提示一次", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
 
     alerts.evaluate(input({ conflicts: [conflict] }));
     alerts.evaluate(input({ conflicts: [] }));
@@ -66,7 +78,7 @@ describe("Alerts 的冲突提示", () => {
   });
 
   it("窗口不在前台时不提示，也不记账", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
 
     expect(alerts.evaluate(input({ focused: false, conflicts: [conflict] }))).toEqual([]);
     expect(alerts.evaluate(input({ conflicts: [conflict] }))).toHaveLength(1);
@@ -75,7 +87,7 @@ describe("Alerts 的冲突提示", () => {
 
 describe("Alerts 的启动提示", () => {
   it("对端有改动时提示一次", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
     const peers = [device("aa", { label: "书房台式机", payload: payload({ count: 3 }) })];
 
     const first = alerts.evaluate(input({ peersWithChanges: peers }));
@@ -86,13 +98,13 @@ describe("Alerts 的启动提示", () => {
   });
 
   it("对端没有改动时什么都不提示", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
 
     expect(alerts.evaluate(input())).toEqual([]);
   });
 
   it("窗口不在前台时留到聚焦后再提示", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
     const peers = [device("aa", { payload: payload({ count: 1 }) })];
 
     expect(alerts.evaluate(input({ focused: false, peersWithChanges: peers }))).toEqual([]);
@@ -104,7 +116,7 @@ describe("Alerts 的故障提示", () => {
   const failure: FailureState = { since: 1_699_999_400_000, message: "连接被拒绝" };
 
   it("故障开始即提示，未到间隔不重复", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
 
     expect(alerts.evaluate(input({ failure }))).toHaveLength(1);
     expect(alerts.evaluate(input({ failure, now: 1_700_000_000_000 + 599_000 }))).toEqual([]);
@@ -112,14 +124,14 @@ describe("Alerts 的故障提示", () => {
   });
 
   it("关闭重提醒后只提示一次", () => {
-    const alerts = new Alerts({ repeatSeconds: 0 });
+    const alerts = new Alerts({ repeatSeconds: 0, conflictRepeatSeconds: 0 });
 
     expect(alerts.evaluate(input({ failure }))).toHaveLength(1);
     expect(alerts.evaluate(input({ failure, now: 1_700_000_000_000 + 86_400_000 }))).toEqual([]);
   });
 
   it("恢复时提示一次，并重置重提醒", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
 
     alerts.evaluate(input({ failure }));
     const recovered = alerts.evaluate(input({ failure: null }));
@@ -132,7 +144,7 @@ describe("Alerts 的故障提示", () => {
   });
 
   it("恢复时窗口不在前台，则留到聚焦后再提示", () => {
-    const alerts = new Alerts({ repeatSeconds: 600 });
+    const alerts = new Alerts({ repeatSeconds: 600, conflictRepeatSeconds: 0 });
 
     alerts.evaluate(input({ failure }));
     expect(alerts.evaluate(input({ focused: false, failure: null }))).toEqual([]);

@@ -259,6 +259,12 @@ export const ENGLISH = {
     "When on, files that still hold traces of a merge are called out separately; this changes the wording only, not whether something counts as a conflict.",
   "提醒": "Notifications",
   "持续故障的重提醒间隔": "Interval between repeated notices of an ongoing failure",
+  "冲突仍在时的重提醒间隔": "Repeat interval while a conflict persists",
+  "冲突持续存在时按此间隔再次提醒；0 表示每个冲突只提示一次。":
+    "Repeat the notice at this interval while a conflict remains; 0 notifies each conflict only once.",
+  "冲突仍在时的重提醒间隔（秒）；0 表示每个冲突只提示一次。":
+    "Repeat interval while a conflict persists (seconds); 0 notifies each conflict only once.",
+  "notify.conflict_repeat_seconds 只能取 {choices}": "notify.conflict_repeat_seconds must be one of {choices}",
   "仅在中继持续无法连通时使用；0 表示只在故障开始时提醒一次。":
     "Used only while a relay stays unreachable; 0 means to notify once when the failure starts.",
   "关闭重提醒": "no repeat notice",

@@ -35,6 +35,8 @@ export const DEFAULT_IDLE_INTERVAL_SECONDS = 60;
 
 /** 默认的重提醒间隔（秒）。 */
 export const DEFAULT_REPEAT_SECONDS = 600;
+/** 冲突仍在时的默认重提醒间隔（秒）。 */
+export const DEFAULT_CONFLICT_REPEAT_SECONDS = 600;
 
 const MAX_RELAYS = 8;
 const MAX_ALIAS_LENGTH = 64;
@@ -88,6 +90,8 @@ export interface UiSettings {
 export interface NotifySettings {
   /** 持续故障的重提醒间隔（秒），0 表示关闭。 */
   readonly repeatSeconds: number;
+  /** 冲突仍在时的重提醒间隔（秒）；0 表示每个冲突只提示一次。 */
+  readonly conflictRepeatSeconds: number;
 }
 
 /** 设备配置。 */
@@ -200,6 +204,7 @@ export function serializeConfig(config: Config): string {
     },
     notify: {
       repeat_seconds: config.notify.repeatSeconds,
+      conflict_repeat_seconds: config.notify.conflictRepeatSeconds,
     },
     ui: {
       language: config.ui.language,
@@ -232,7 +237,7 @@ export function defaultConfig(alias: string): Config {
       idleIntervalSeconds: DEFAULT_IDLE_INTERVAL_SECONDS,
       detectConflictFiles: true,
     },
-    notify: { repeatSeconds: DEFAULT_REPEAT_SECONDS },
+    notify: { repeatSeconds: DEFAULT_REPEAT_SECONDS, conflictRepeatSeconds: DEFAULT_CONFLICT_REPEAT_SECONDS },
     ui: { language: "auto" },
     query: { remote: "" },
     relay: [
@@ -286,6 +291,8 @@ detect_conflict_files = true
 [notify]
 # ${t("持续故障的重提醒间隔（秒），可取值 {choices}，0 表示关闭。", { choices: REPEAT_SECONDS_CHOICES.join(separator) })}
 repeat_seconds = ${DEFAULT_REPEAT_SECONDS}
+# ${t("冲突仍在时的重提醒间隔（秒）；0 表示每个冲突只提示一次。")}
+conflict_repeat_seconds = ${DEFAULT_CONFLICT_REPEAT_SECONDS}
 
 [ui]
 # ${t("界面语言，可取 {choices}。auto 表示跟随 Obsidian 的界面语言；", { choices: LANGUAGE_CHOICES.join(separator) })}
@@ -409,7 +416,10 @@ function parseCollect(value: unknown, problems: string[]): CollectSettings {
 }
 
 function parseNotify(value: unknown, problems: string[]): NotifySettings {
-  const fallback: NotifySettings = { repeatSeconds: DEFAULT_REPEAT_SECONDS };
+  const fallback: NotifySettings = {
+    repeatSeconds: DEFAULT_REPEAT_SECONDS,
+    conflictRepeatSeconds: DEFAULT_CONFLICT_REPEAT_SECONDS,
+  };
   if (value === undefined) {
     return fallback;
   }
@@ -418,14 +428,22 @@ function parseNotify(value: unknown, problems: string[]): NotifySettings {
     return fallback;
   }
 
-  checkKeys(value, ["repeat_seconds"], "notify", problems);
+  checkKeys(value, ["repeat_seconds", "conflict_repeat_seconds"], "notify", problems);
   const repeatSeconds = readInteger(value, "repeat_seconds", "notify", problems) ?? fallback.repeatSeconds;
+  const conflictRepeatSeconds =
+    readInteger(value, "conflict_repeat_seconds", "notify", problems) ?? fallback.conflictRepeatSeconds;
   if (!isRepeatChoice(repeatSeconds)) {
     problems.push(
       t("notify.repeat_seconds 只能取 {choices}（秒）", { choices: REPEAT_SECONDS_CHOICES.join(t("、")) }),
     );
   }
-  return { repeatSeconds };
+  if (!isRepeatChoice(conflictRepeatSeconds)) {
+    problems.push(
+      t("notify.conflict_repeat_seconds 只能取 {choices}", { choices: REPEAT_SECONDS_CHOICES.join(t("、")) }),
+    );
+    return fallback;
+  }
+  return { repeatSeconds, conflictRepeatSeconds };
 }
 
 function parseUi(value: unknown, problems: string[]): UiSettings {

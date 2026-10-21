@@ -11,6 +11,8 @@ import { displayName } from "./state.js";
 export interface AlertSettings {
   /** 持续故障的重提醒间隔（秒），0 表示关闭重提醒。 */
   readonly repeatSeconds: number;
+  /** 冲突仍在时的重提醒间隔（秒），0 表示每个冲突只提示一次。 */
+  readonly conflictRepeatSeconds: number;
 }
 
 /** 一条待弹出的提示。 */
@@ -49,7 +51,8 @@ export interface AlertInput {
 
 /** 提醒的判断。 */
 export class Alerts {
-  private readonly notifiedConflicts = new Set<string>();
+  /** 每个冲突文件上一次提示的时间；冲突消失后移除。 */
+  private readonly notifiedConflicts = new Map<string, number>();
   private startupNotified = false;
   private failureNotifiedAt: number | null = null;
   private pendingRecovery = false;
@@ -77,21 +80,32 @@ export class Alerts {
     return notices;
   }
 
-  /** 冲突提示：一个文件弹一次，该文件不再冲突后可以再次提示。 */
+  /**
+   * 冲突提示：首次出现即报；仍在冲突时按间隔重报，间隔为 0 则只报一次。
+   *
+   * 冲突消失后从表里移除，下次再出现仍算首次，免得把「已经提示过」带到新的冲突上。
+   */
   private collectConflictNotices(input: AlertInput): Notice[] {
     const current = new Set(input.conflicts.map((conflict) => conflict.path));
-    for (const path of [...this.notifiedConflicts]) {
+    for (const path of [...this.notifiedConflicts.keys()]) {
       if (!current.has(path)) {
         this.notifiedConflicts.delete(path);
       }
     }
 
+    const repeatMs = this.settings.conflictRepeatSeconds * 1000;
     const notices: Notice[] = [];
     for (const conflict of input.conflicts) {
-      if (this.notifiedConflicts.has(conflict.path)) {
+      const last = this.notifiedConflicts.get(conflict.path);
+      if (last === undefined) {
+        this.notifiedConflicts.set(conflict.path, input.now);
+        notices.push(conflictNotice(conflict, input.conflicts.length));
         continue;
       }
-      this.notifiedConflicts.add(conflict.path);
+      if (repeatMs === 0 || input.now - last < repeatMs) {
+        continue;
+      }
+      this.notifiedConflicts.set(conflict.path, input.now);
       notices.push(conflictNotice(conflict, input.conflicts.length));
     }
     return notices;
