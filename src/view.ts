@@ -193,11 +193,7 @@ export class WipView extends ItemView {
       pane.createDiv({ text: t("尚无可用的对端记录。") });
     } else {
       for (const peer of snapshot.peers) {
-        overviewPeer(pane, peer, () => {
-          this.tab = "peers";
-          this.updateTabs();
-          this.render();
-        });
+        overviewPeer(pane, peer);
       }
     }
 
@@ -626,11 +622,8 @@ function conflictLine(parent: HTMLElement, conflict: Conflict): void {
 }
 
 /** 概览里的一台对端：只看规模与时间，明细展开才出现。 */
-function overviewPeer(parent: HTMLElement, peer: DeviceStatus, onOpen: () => void): void {
-  const block = parent.createDiv({
-    cls: "vault-wip-peer vault-wip-peer-link",
-    attr: { title: t("点击查看明细") },
-  });
+function overviewPeer(parent: HTMLElement, peer: DeviceStatus): void {
+  const block = parent.createDiv({ cls: "vault-wip-peer" });
   const head = block.createDiv({ cls: "vault-wip-peer-head" });
   head.createDiv({ cls: `vault-wip-dot ${freshnessClass(peer.collectedAt)}` });
   const title = head.createDiv({ cls: "vault-wip-peer-title" });
@@ -639,8 +632,12 @@ function overviewPeer(parent: HTMLElement, peer: DeviceStatus, onOpen: () => voi
     cls: "vault-wip-peer-meta",
     text: `${String(peer.payload.count)} · ${relativeTime(peer.collectedAt)}`,
   });
+  table(block, [
+    [t("清单是否截断"), peer.payload.truncated ? t("是") : t("否")],
+  ]);
   kindChips(block, peer.payload);
-  block.onclick = onOpen;
+  groupedFiles(block, peer.payload.paths, peer.payload.kinds);
+  suspectNotes(block, peer.payload);
 }
 
 /** 一台对端的状态。 */
@@ -653,24 +650,17 @@ function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerpri
   });
   const title = head.createDiv({ cls: "vault-wip-peer-title" });
   title.createDiv({ cls: "vault-wip-peer-name", text: displayName(peer) });
-  title.createDiv({
-    cls: "vault-wip-peer-meta",
-    text: `${peer.fingerprint.slice(0, 12)}… · ${relativeTime(peer.collectedAt)}`,
-  });
+  title.createDiv({ cls: "vault-wip-peer-meta", text: relativeTime(peer.collectedAt) });
   const revoke = head.createEl("button", { cls: "vault-wip-revoke", text: t("吊销这台设备") });
   revoke.onclick = () => {
     onRevoke(peer.fingerprint);
   };
 
   table(block, [
+    [t("指纹"), peer.fingerprint],
     [t("序号"), String(peer.sequence)],
-    [t("采集时间"), `${clockText(peer.collectedAt)}（${relativeTime(peer.collectedAt)}）`],
-    [t("改动文件"), String(peer.payload.count)],
-    [t("清单是否截断"), peer.payload.truncated ? t("是") : t("否")],
+    [t("采集时间"), clockText(peer.collectedAt)],
   ]);
-  kindChips(block, peer.payload);
-  groupedFiles(block, peer.payload.paths, peer.payload.kinds);
-  suspectNotes(block, peer.payload);
 }
 
 /** 记录的新鲜度：一分钟内为新鲜，十分钟内为偏旧，更久为陈旧。 */
