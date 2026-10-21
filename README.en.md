@@ -46,6 +46,8 @@ The plugin's release page carries the three files and checksums; server binaries
 
 Plugin and relay are paired by record format. Starting with `0.2.0` the format is v2, which is not compatible with `0.1.0`; both sides must be upgraded together. A relay does not parse record content, but it does take part in record signature verification, so it has to be upgraded whenever the format changes.
 
+Starting with `0.3.0`, registration is split into creating a channel and joining one: joining requires the channel ID and token, and older clients cannot be mixed in.
+
 ## Documentation
 
 The design documents are written in Chinese:
