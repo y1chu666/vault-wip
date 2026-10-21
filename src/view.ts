@@ -74,10 +74,6 @@ export class WipView extends ItemView {
     const root = this.contentEl.createDiv({ cls: "vault-wip-view" });
 
     const tabs = root.createDiv({ cls: "vault-wip-tabs" });
-    tabs.style.display = "flex";
-    tabs.style.gap = "0.5em";
-    tabs.style.marginBottom = "0.75em";
-
     const body = root.createDiv({ cls: "vault-wip-body" });
     for (const name of TABS) {
       const button = tabs.createEl("button", { text: tabLabel(name) });
@@ -454,7 +450,7 @@ export class WipView extends ItemView {
   private updateTabs(): void {
     for (const [name, button] of this.tabButtons) {
       button.setText(tabLabel(name));
-      button.style.fontWeight = name === this.tab ? "600" : "400";
+      button.classList.toggle("is-active", name === this.tab);
     }
   }
 }

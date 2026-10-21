@@ -181,3 +181,41 @@
 .vault-wip-badge.is-unknown {
   color: var(--text-faint);
 }
+
+/* 标签栏：分段控件，选中态用主题强调色，窄宽度时横向滚动。 */
+.vault-wip-tabs {
+  display: flex;
+  gap: 0.15em;
+  margin-bottom: 0.9em;
+  border-bottom: 1px solid var(--background-modifier-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.vault-wip-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.vault-wip-tabs button {
+  flex: none;
+  padding: 0.4em 0.75em;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.vault-wip-tabs button:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.vault-wip-tabs button.is-active {
+  color: var(--text-normal);
+  border-bottom-color: var(--interactive-accent);
+  font-weight: 600;
+}
