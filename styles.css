@@ -6,7 +6,7 @@
 }
 
 .vault-wip-view h4 {
-  margin: 1.1em 0 0.3em;
+  margin: 1.5em 0 0.4em;
   font-size: 0.82em;
   font-weight: 600;
   color: var(--text-faint);
@@ -43,7 +43,7 @@
 .vault-wip-relay {
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
-  margin-bottom: 0.6em;
+  margin-bottom: 0.7em;
   padding: 0.55em 0.7em;
   background: var(--background-secondary);
 }
@@ -368,15 +368,6 @@
   color: var(--text-muted);
 }
 
-/* 概览的对端卡片只给摘要，点开才进入明细。 */
-.vault-wip-peer-link {
-  cursor: pointer;
-}
-
-.vault-wip-peer-link:hover {
-  border-color: var(--interactive-accent);
-}
-
 /* 安全板块：小节之间与按钮行都留出间隔，避免挤成一团。 */
 .vault-wip-security h4 {
   margin-top: 1.5em;
@@ -395,7 +386,7 @@
 
 /* 本机改动独立成卡片，与设备信息、各端卡片区分开。 */
 .vault-wip-card {
-  margin-bottom: 0.6em;
+  margin: 0.9em 0 0.7em;
   padding: 0.55em 0.7em;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -418,4 +409,13 @@
   font-family: var(--font-monospace);
   font-size: 0.78em;
   color: var(--text-muted);
+}
+
+/* 固定滚动条槽位：折叠内容改变高度时，宽度不再跟着跳。 */
+.workspace-leaf-content[data-type="vault-wip-view"] .view-content {
+  scrollbar-gutter: stable;
+}
+
+.vault-wip-tabs {
+  scrollbar-gutter: stable;
 }
