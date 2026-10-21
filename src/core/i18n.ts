@@ -127,6 +127,7 @@ export const ENGLISH = {
   "点击查看明细": "Click for details",
   "尚无可用的对端记录。": "No peer records yet.",
   "对端设备": "Peers",
+  "在线对端": "Peers online",
   "冲突": "Conflicts",
   "可用中继": "Relays online",
   "{count} 秒前": "{count}s ago",
