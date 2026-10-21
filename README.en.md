@@ -42,6 +42,10 @@ Obsidian on the desktop is required, plus a machine that can stay on to run the 
 
 The plugin's release page carries the three files and checksums; server binaries are on the [WIP Relay release page](https://github.com/y1chu666/wip-relay/releases).
 
+## Version compatibility
+
+Plugin and relay are paired by record format. Starting with `0.2.0` the format is v2, which is not compatible with `0.1.0`; both sides must be upgraded together. A relay does not parse record content, but it does take part in record signature verification, so it has to be upgraded whenever the format changes.
+
 ## Documentation
 
 The design documents are written in Chinese:
