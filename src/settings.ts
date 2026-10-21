@@ -105,7 +105,7 @@ export class WipSettingTab extends PluginSettingTab {
 
     new Setting(this.containerEl)
       .setName(t("界面语言"))
-      .setDesc(t("跟随 Obsidian 时按界面的语言取文案；命令名在插件重新加载之后才会跟着变。"))
+      .setDesc(t("跟随 Obsidian 时按界面的语言取文案；命令名须在插件重新加载后随之改变。"))
       .addDropdown((dropdown) =>
         dropdown
           .addOptions({ auto: t("跟随 Obsidian"), zh: t("中文"), en: t("英文") })
@@ -391,7 +391,7 @@ export class WipSettingTab extends PluginSettingTab {
       text: t("配置文件：{path}", { path: path ?? t("未知") }),
     });
     this.containerEl.createEl("p", {
-      text: t("设备私钥、内容密钥与中继公钥另存于同一目录，已被该目录下的忽略清单挡住；请勿把它们纳入版本控制。"),
+      text: t("设备私钥、内容密钥与中继公钥另存于同一目录，已由该目录下的忽略清单排除；请勿将其纳入版本控制。"),
     });
     const directory = this.plugin.pluginDirectory();
     if (directory !== null) {

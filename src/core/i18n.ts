@@ -137,11 +137,11 @@ export const ENGLISH = {
   "本设备已退役：需要重新注册才能继续使用。":
     "This device has been retired. Register again before using it.",
   "尚未取得本机状态。": "Local status is not available yet.",
-  "没有发现两端改到同一个文件。": "No file has been changed on both sides.",
+  "未发现两端改动同一文件。": "No file has been changed on both sides.",
   "立即采集并上报": "Collect and report now",
 
   // 状态视图：各端状态。
-  "还没有收到其他设备的记录。": "No updates from other devices yet.",
+  "尚无可用的对端设备记录。": "No updates from other devices yet.",
   "已被吊销": "Revoked",
   "下列设备的记录此后不再参与判断；吊销名单长期保留，不会自行消失。":
     "These devices no longer take part in the check. The revoke list is kept permanently and does not expire.",
@@ -161,12 +161,12 @@ export const ENGLISH = {
   "{count} 个文件的差异仅在行尾或权限位":
     "The difference in {count} files is only in line endings or permission bits",
   "{count} 个文件留有合并冲突的痕迹": "{count} files still hold traces of a merge conflict",
-  "{path}：与 {names} 的重叠{caution}": "{path}: overlaps with {names}{caution}",
+  "{path}：与 {names} 的改动重叠{caution}": "{path}: overlaps with {names}{caution}",
   "（其中一边的差异仅在行尾或权限位）":
     " (the difference on one side is only in line endings or permission bits)",
 
   // 状态视图：中继。
-  "尚未配置中继：请在插件设置里添加一台。": "No relay is configured yet. Add one in the plugin settings.",
+  "尚未配置中继：请先在设置中添加。": "No relay is configured yet. Add one in the plugin settings.",
   "有中继处于降级传输：通信不加密或可被冒充，此时不允许注册、吊销与退役。":
     "A relay is on a degraded transport: traffic is unencrypted or can be impersonated, so registration, revocation and retirement are unavailable.",
   "这一级属于降级传输：注册、吊销与退役在此不可用。":
@@ -202,38 +202,38 @@ export const ENGLISH = {
   "保存到文件": "Save to file",
   "密钥串已复制到剪贴板": "Key string copied to the clipboard",
   "复制失败，请改用保存到文件": "Copying failed; use \"save to file\" instead",
-  "已写入 {path}：请按秘密看待这个文件。": "Written to {path}. Treat this file as a secret.",
+  "已写入 {path}；该文件应按机密文件保管。": "Written to {path}. Treat this file as a secret.",
   "口令封装": "Passphrase-protected",
-  "口令封装的文件仍需要口令才能解开，可以走不那么可信的渠道；口令往往比随机密钥串弱，因此这种方式排在密钥串之后。":
+  "口令封装的文件需要口令才能解开，可通过可信度较低的渠道传递；口令强度通常低于随机密钥串，因此列在密钥串之后。":
     "A passphrase-protected file still needs the passphrase to be opened, so it may travel over a less trusted channel. A passphrase is usually weaker than a random key string, which is why this way comes after the key string.",
   "口令": "passphrase",
   "复制封装的密钥": "Copy protected key",
   "封装的密钥已复制到剪贴板": "Protected key copied to the clipboard",
-  "已写入 {path}：连同口令一起交给另一台设备。":
+  "已写入 {path}；请连同口令一并交给目标设备。":
     "Written to {path}. Hand it to the other device together with the passphrase.",
   "导入密钥": "Import a key",
-  "把另一台设备给出的密钥串或口令封装文本粘贴进来；口令留空表示文本是密钥串本身。":
+  "粘贴另一台设备给出的密钥串或口令封装文本；口令留空表示文本本身即密钥串。":
     "Paste the key string or the passphrase-protected text from the other device; leave the passphrase empty if the text is the key string itself.",
   "密钥串或口令封装文本": "key string or passphrase-protected text",
   "口令（可留空）": "passphrase (may be empty)",
   "导入并换用": "Import and switch",
   "中继身份": "Relay identity",
-  "首次配对时中继的公钥没有旁证，只能先收下；把下面的指纹与中继那一侧核对一次，此后换了钥匙就会停下来。":
+  "首次配对时中继的公钥无从核验，只能先予接受；请将下列指纹与中继一侧核对一次。此后公钥一旦变化，本机将停止采用其回应。":
     "At the first pairing a relay's public key has no second opinion, so it is taken as it comes. Compare the fingerprints below with the relay side once; from then on a changed key stops the connection.",
   "{name} 的公钥指纹": "{name} public key fingerprint",
   "{name} 的证书指纹": "{name} certificate fingerprint",
-  "本设备的指纹出现在吊销名单里，需要中继那边恢复之后才能继续使用。":
+  "本设备指纹已在吊销名单中；须由中继侧恢复后方可继续使用。":
     "This device's fingerprint is on the revoke list; the relay side must undo that before this device can be used again.",
   "退役本设备": "Retire this device",
   "确认退役：删除各中继上的本设备数据并记入吊销名单":
     "Confirm retirement: delete this device's data on every relay and add it to the revoke list",
-  "退役会删除各中继上本设备的数据，并把本设备记入吊销名单；此后需要重新向中继注册才能继续使用。":
+  "退役会删除各中继上本设备的数据，并将本设备记入吊销名单；此后须重新注册方可继续使用。":
     "Retiring deletes this device's data on every relay and adds it to the revoke list; afterwards it must register with the relays again before it can be used.",
 
   // 状态视图：读取配置失败时的说明。
   "配置有误：{error}": "Configuration error: {error}",
   "配置文件：{path}": "Configuration file: {path}",
-  "尚未就绪：请在设置里填好中继信息。": "Not ready yet: fill in the relay settings first.",
+  "尚未就绪：请先在设置中填写中继信息。": "Not ready yet: fill in the relay settings first.",
 
   // 设置页。
   "公开证书（推荐）": "public certificate (recommended)",
@@ -283,14 +283,14 @@ export const ENGLISH = {
   "凭证": "credential",
   "创建或加入频道": "Create or join a channel",
   "文件": "Files",
-  "设备私钥、内容密钥与中继公钥另存于同一目录，已被该目录下的忽略清单挡住；请勿把它们纳入版本控制。":
+  "设备私钥、内容密钥与中继公钥另存于同一目录，已由该目录下的忽略清单排除；请勿将其纳入版本控制。":
     "The device private key, the content key and the relay public keys live in the same folder, kept out of version control by the ignore list there; do not add them.",
   "插件目录：{path}": "Plugin folder: {path}",
 
   // 设置页：界面语言。
   "界面": "Interface",
   "界面语言": "Interface language",
-  "跟随 Obsidian 时按界面的语言取文案；命令名在插件重新加载之后才会跟着变。":
+  "跟随 Obsidian 时按界面的语言取文案；命令名须在插件重新加载后随之改变。":
     "When following Obsidian, the wording follows the interface language; command names change only after the plugin is reloaded.",
   "跟随 Obsidian": "follow Obsidian",
   "中文": "Chinese",

@@ -369,19 +369,20 @@
 }
 
 /* 安全板块：小节之间与按钮行都留出间隔，避免挤成一团。 */
-.vault-wip-security h4 {
-  margin-top: 1.5em;
+.vault-wip-security .vault-wip-card {
+  margin-bottom: 0.7em;
 }
 
-.vault-wip-security > .vault-wip-table {
-  margin-bottom: 0.5em;
-}
-
-.vault-wip-security > .vault-wip-actions {
+.vault-wip-security .vault-wip-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45em;
-  margin: 0.4em 0 1em;
+  margin: 0.4em 0 0.2em;
+}
+
+.vault-wip-card > .vault-wip-card-title {
+  margin-bottom: 0.45em;
+  font-weight: 600;
 }
 
 /* 本机改动独立成卡片，与设备信息、各端卡片区分开。 */
