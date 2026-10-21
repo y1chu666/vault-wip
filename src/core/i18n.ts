@@ -166,7 +166,12 @@ export const ENGLISH = {
     " (the difference on one side is only in line endings or permission bits)",
 
   // 状态视图：中继。
-  "尚未配置中继：请先在设置中添加。": "No relay is configured yet. Add one in the plugin settings.",
+  "尚未配置中继：请先在设置中添加地址；中继服务端见 ":
+    "No relay is configured yet. Add an address in the settings first; the relay server is at ",
+  "WIP Relay 项目": "the WIP Relay project",
+  "尚未连接任何中继：请在设置中填写地址并完成注册。":
+    "Not connected to any relay: fill in an address in the settings and register.",
+  "以下中继尚未完成注册。": "The following relays are not registered yet.",
   "有中继处于降级传输：通信不加密或可被冒充，此时不允许注册、吊销与退役。":
     "A relay is on a degraded transport: traffic is unencrypted or can be impersonated, so registration, revocation and retirement are unavailable.",
   "这一级属于降级传输：注册、吊销与退役在此不可用。":

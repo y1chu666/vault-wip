@@ -192,6 +192,15 @@ export class WipView extends ItemView {
 
   private fillOverview(pane: HTMLElement, snapshot: EngineSnapshot): void {
     overviewStats(pane, snapshot);
+
+    const registered = snapshot.relays.filter((relay) => relay.channelId !== "").length;
+    if (snapshot.relays.length === 0) {
+      hintWithLink(pane);
+    } else if (registered === 0) {
+      const warn = pane.createDiv({ cls: "vault-wip-warning" });
+      warn.setText(t("尚未连接任何中继：请在设置中填写地址并完成注册。"));
+    }
+
     heading(pane, t("本设备"));
     table(pane, [
       [t("名称"), snapshot.selfLabel === "" ? t("（未命名）") : snapshot.selfLabel],
@@ -284,8 +293,11 @@ export class WipView extends ItemView {
   private fillRelays(pane: HTMLElement, snapshot: EngineSnapshot): void {
     heading(pane, t("中继"));
     if (snapshot.relays.length === 0) {
-      pane.createDiv({ text: t("尚未配置中继：请先在设置中添加。") });
+      hintWithLink(pane);
       return;
+    }
+    if (snapshot.relays.every((relay) => relay.channelId === "")) {
+      pane.createDiv({ cls: "vault-wip-warning", text: t("以下中继尚未完成注册。") });
     }
     if (snapshot.degraded) {
       const warn = pane.createDiv({ cls: "vault-wip-warning" });
@@ -522,6 +534,16 @@ function stat(parent: HTMLElement, value: string, label: string): void {
   const box = parent.createDiv({ cls: "vault-wip-stat" });
   box.createDiv({ cls: "vault-wip-stat-value", text: value });
   box.createDiv({ cls: "vault-wip-stat-label", text: label });
+}
+
+/** 中继服务端的项目地址；尚未配置中继时指给使用者。 */
+const RELAY_PROJECT_URL = "https://github.com/y1chu666/wip-relay";
+
+/** 尚未配置中继时的提示，末尾给出项目地址。 */
+function hintWithLink(parent: HTMLElement): void {
+  const line = parent.createDiv({ cls: "vault-wip-warning" });
+  line.createSpan({ text: t("尚未配置中继：请先在设置中添加地址；中继服务端见 ") });
+  line.createEl("a", { href: RELAY_PROJECT_URL, text: t("WIP Relay 项目") });
 }
 
 /** 一张带标题的卡片，安全一栏的各个小节都用它分开。 */
