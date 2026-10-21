@@ -2,7 +2,7 @@
 //
 // 这里只显示与触发动作，不做判断：判断都在 src/core 里，免得同一套规则在界面上
 // 再写一遍。界面本身不进覆盖率统计，因此它保持直白：取一份现状，逐块填上文字。
-import { ItemView, Notice, type WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, setIcon, type WorkspaceLeaf } from "obsidian";
 
 import { displayName, type Conflict, type DeviceStatus } from "./core/state.js";
 import type { EngineSnapshot, RelayStatus } from "./core/engine.js";
@@ -182,8 +182,8 @@ export class WipView extends ItemView {
         [t("改动文件"), String(local.count)],
         [t("清单是否截断"), local.truncated ? t("是") : t("否")],
       ]);
-      kindSummary(pane, local);
-      pathList(pane, local.paths, local.kinds);
+      kindChips(pane, local);
+      groupedFiles(pane, local.paths, local.kinds);
       suspectNotes(pane, local);
     }
 
@@ -477,57 +477,96 @@ function table(parent: HTMLElement, rows: readonly (readonly [string, string])[]
   }
 }
 
-/** 改动类型的显示符号。 */
-const KIND_MARKS: Readonly<Record<string, string>> = {
-  A: "+",
-  M: "~",
-  D: "-",
-  R: "→",
-  U: "!",
-  "?": "?",
-};
+/** 改动类型的展示信息：图标、配色类与名称。 */
+const KIND_DISPLAY: readonly {
+  readonly code: string;
+  readonly icon: string;
+  readonly cls: string;
+  readonly text: (count: number) => string;
+}[] = [
+  { code: "A", icon: "file-plus", cls: "is-added", text: (count) => t("新增 {count} 个", { count }) },
+  { code: "M", icon: "pencil", cls: "is-modified", text: (count) => t("修改 {count} 个", { count }) },
+  { code: "D", icon: "file-minus", cls: "is-deleted", text: (count) => t("删除 {count} 个", { count }) },
+  { code: "R", icon: "arrow-right-left", cls: "is-renamed", text: (count) => t("重命名 {count} 个", { count }) },
+  { code: "U", icon: "triangle-alert", cls: "is-unmerged", text: (count) => t("冲突 {count} 个", { count }) },
+  { code: "?", icon: "file-question", cls: "is-untracked", text: (count) => t("未跟踪 {count} 个", { count }) },
+  { code: "", icon: "file", cls: "is-unknown", text: (count) => t("类型未知 {count} 个", { count }) },
+];
 
-/** 按类型汇总改动，让人一眼看出新增、修改与删除各有多少。 */
-function kindSummary(parent: HTMLElement, payload: StatusPayload): void {
+/** 按类型计数，供统计块与分组共用。 */
+function countKinds(kinds: readonly string[]): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const kind of payload.kinds) {
+  for (const kind of kinds) {
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
+  return counts;
+}
 
-  const parts: string[] = [];
-  const groups: readonly { readonly code: string; readonly text: (count: number) => string }[] = [
-    { code: "A", text: (count) => t("新增 {count} 个", { count }) },
-    { code: "M", text: (count) => t("修改 {count} 个", { count }) },
-    { code: "D", text: (count) => t("删除 {count} 个", { count }) },
-    { code: "R", text: (count) => t("重命名 {count} 个", { count }) },
-    { code: "U", text: (count) => t("冲突 {count} 个", { count }) },
-    { code: "?", text: (count) => t("未跟踪 {count} 个", { count }) },
-    { code: "", text: (count) => t("类型未知 {count} 个", { count }) },
-  ];
-  for (const group of groups) {
-    const count = counts.get(group.code) ?? 0;
-    if (count > 0) {
-      parts.push(group.text(count));
+/** 顶部统计块：一眼看出各类改动各有多少，颜色只作辅助，文字与图标才是依据。 */
+function kindChips(parent: HTMLElement, payload: StatusPayload): void {
+  const counts = countKinds(payload.kinds);
+  const chips = parent.createDiv({ cls: "vault-wip-kinds" });
+  for (const kind of KIND_DISPLAY) {
+    const count = counts.get(kind.code) ?? 0;
+    if (count === 0) {
+      continue;
     }
-  }
-  if (parts.length > 0) {
-    parent.createDiv({ text: parts.join(t("、")) });
+    const chip = chips.createEl("span", { cls: `vault-wip-kind ${kind.cls}` });
+    setIcon(chip.createEl("span", { cls: "vault-wip-kind-icon" }), kind.icon);
+    chip.createEl("span", { text: kind.text(count) });
   }
 }
 
-/** 一段文件名清单，过长时只列前若干条；每行前面带改动类型标记。 */
-function pathList(parent: HTMLElement, paths: readonly string[], kinds: readonly string[]): void {
+/** 按类型分组的文件清单，每组默认折叠，文件多时不必先滚过一屏。 */
+function groupedFiles(parent: HTMLElement, paths: readonly string[], kinds: readonly string[]): void {
   if (paths.length === 0) {
     parent.createDiv({ text: t("没有改动文件。") });
     return;
   }
-  for (const [index, path] of paths.slice(0, MAX_LISTED_PATHS).entries()) {
-    const mark = KIND_MARKS[kinds[index] ?? ""] ?? "·";
-    parent.createDiv({ text: `${mark} ${path}` });
+
+  const grouped = new Map<string, string[]>();
+  for (const [index, path] of paths.entries()) {
+    const code = kinds[index] ?? "";
+    const list = grouped.get(code) ?? [];
+    list.push(path);
+    grouped.set(code, list);
   }
-  if (paths.length > MAX_LISTED_PATHS) {
-    parent.createDiv({ text: t("另有 {count} 个文件未列出。", { count: paths.length - MAX_LISTED_PATHS }) });
+
+  for (const kind of KIND_DISPLAY) {
+    const entries = grouped.get(kind.code);
+    if (entries === undefined || entries.length === 0) {
+      continue;
+    }
+    const details = parent.createEl("details", { cls: `vault-wip-group ${kind.cls}` });
+    const summary = details.createEl("summary", { cls: "vault-wip-group-title" });
+    setIcon(summary.createEl("span", { cls: "vault-wip-kind-icon" }), kind.icon);
+    summary.createEl("span", { text: kind.text(entries.length) });
+
+    for (const path of entries.slice(0, MAX_LISTED_PATHS)) {
+      fileRow(details, path, kind);
+    }
+    if (entries.length > MAX_LISTED_PATHS) {
+      details.createDiv({
+        cls: "vault-wip-file-more",
+        text: t("另有 {count} 个文件未列出。", { count: entries.length - MAX_LISTED_PATHS }),
+      });
+    }
   }
+}
+
+/** 一行文件：类型徽章、目录与文件名分开着色，悬停给出完整路径。 */
+function fileRow(
+  parent: HTMLElement,
+  path: string,
+  kind: (typeof KIND_DISPLAY)[number],
+): void {
+  const row = parent.createDiv({ cls: "vault-wip-file", attr: { title: path } });
+  setIcon(row.createEl("span", { cls: `vault-wip-badge ${kind.cls}` }), kind.icon);
+  const slash = path.lastIndexOf("/");
+  if (slash >= 0) {
+    row.createEl("span", { cls: "vault-wip-file-dir", text: path.slice(0, slash + 1) });
+  }
+  row.createEl("span", { cls: "vault-wip-file-name", text: path.slice(slash + 1) });
 }
 
 /** 假冲突的提示：只影响措辞，不影响是否算冲突。 */
@@ -563,7 +602,8 @@ function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerpri
     [t("采集时间"), clockText(peer.collectedAt)],
     [t("改动文件"), String(peer.payload.count)],
   ]);
-  pathList(block, peer.payload.paths, peer.payload.kinds);
+  kindChips(block, peer.payload);
+  groupedFiles(block, peer.payload.paths, peer.payload.kinds);
   suspectNotes(block, peer.payload);
   const actions = block.createDiv({ cls: "vault-wip-actions" });
   const button = actions.createEl("button", { text: t("吊销这台设备") });

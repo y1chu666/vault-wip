@@ -45,3 +45,131 @@
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }
+
+/* 改动类型：统计块、分组清单与徽章。颜色只作辅助，文字与图标才是依据。 */
+.vault-wip-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin: 0.5em 0 0.6em;
+}
+
+.vault-wip-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.15em 0.6em;
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+  border: 1px solid var(--background-modifier-border);
+  font-size: 0.85em;
+}
+
+.vault-wip-kind-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.vault-wip-kind-icon svg {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.vault-wip-group {
+  margin: 0.25em 0;
+}
+
+.vault-wip-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.2em 0;
+  cursor: pointer;
+  font-weight: 500;
+  user-select: none;
+}
+
+.vault-wip-group-title:hover {
+  color: var(--text-accent);
+}
+
+.vault-wip-file {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.12em 0 0.12em 1.1em;
+  font-family: var(--font-monospace);
+  font-size: 0.88em;
+}
+
+.vault-wip-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3em;
+  height: 1.3em;
+  border-radius: 4px;
+  flex: none;
+  background: var(--background-modifier-hover);
+}
+
+.vault-wip-badge svg {
+  width: 0.85em;
+  height: 0.85em;
+}
+
+.vault-wip-file-dir {
+  color: var(--text-faint);
+}
+
+.vault-wip-file-name {
+  color: var(--text-normal);
+}
+
+.vault-wip-file-more {
+  padding-left: 2.2em;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.vault-wip-kind.is-added,
+.vault-wip-group.is-added .vault-wip-group-title,
+.vault-wip-badge.is-added {
+  color: var(--color-green);
+}
+
+.vault-wip-kind.is-modified,
+.vault-wip-group.is-modified .vault-wip-group-title,
+.vault-wip-badge.is-modified {
+  color: var(--color-yellow);
+}
+
+.vault-wip-kind.is-deleted,
+.vault-wip-group.is-deleted .vault-wip-group-title,
+.vault-wip-badge.is-deleted {
+  color: var(--color-red);
+}
+
+.vault-wip-kind.is-renamed,
+.vault-wip-group.is-renamed .vault-wip-group-title,
+.vault-wip-badge.is-renamed {
+  color: var(--color-blue);
+}
+
+.vault-wip-kind.is-unmerged,
+.vault-wip-group.is-unmerged .vault-wip-group-title,
+.vault-wip-badge.is-unmerged {
+  color: var(--color-orange);
+}
+
+.vault-wip-kind.is-untracked,
+.vault-wip-group.is-untracked .vault-wip-group-title,
+.vault-wip-badge.is-untracked {
+  color: var(--text-muted);
+}
+
+.vault-wip-kind.is-unknown,
+.vault-wip-group.is-unknown .vault-wip-group-title,
+.vault-wip-badge.is-unknown {
+  color: var(--text-faint);
+}
