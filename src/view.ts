@@ -201,8 +201,9 @@ export class WipView extends ItemView {
       warn.setText(t("尚未连接任何中继：请在设置中填写地址并完成注册。"));
     }
 
-    heading(pane, t("本设备"));
-    table(pane, [
+    const selfCard = section(pane, t("本设备"));
+    selfCard.classList.add("vault-wip-self");
+    table(selfCard, [
       [t("名称"), snapshot.selfLabel === "" ? t("（未命名）") : snapshot.selfLabel],
       [t("指纹"), snapshot.selfFingerprint],
       [t("已上报序号"), String(snapshot.sequence)],
@@ -249,14 +250,15 @@ export class WipView extends ItemView {
     }
 
     heading(pane, t("远端查询"));
+    const remoteBlock = pane.createDiv({ cls: "vault-wip-remote" });
     const remote = snapshot.remote;
-    table(pane, [
+    table(remoteBlock, [
       [t("远端"), remote !== null && "remote" in remote ? refName(remote) : t("无")],
       [t("上次查询"), clockText(snapshot.remoteQueriedAt)],
     ]);
-    pane.createDiv({ text: remoteSummary(remote) });
+    remoteBlock.createDiv({ text: remoteSummary(remote) });
 
-    const actions = pane.createDiv({ cls: "vault-wip-actions" });
+    const actions = pane.createDiv({ cls: "vault-wip-actions vault-wip-actions-even" });
     const button = actions.createEl("button", { text: t("立即采集并上报") });
     button.onclick = () => {
       void this.plugin.reportNow();
@@ -524,7 +526,8 @@ export class WipView extends ItemView {
 function overviewStats(parent: HTMLElement, snapshot: EngineSnapshot): void {
   const grid = parent.createDiv({ cls: "vault-wip-stats" });
   stat(grid, String(snapshot.local?.count ?? 0), t("本机改动"));
-  stat(grid, String(snapshot.peers.length), t("对端设备"));
+  const online = snapshot.peers.filter((peer) => isOnline(peer.collectedAt)).length;
+  stat(grid, `${String(online)}/${String(snapshot.peers.length)}`, t("在线对端"));
   stat(grid, String(snapshot.conflicts.length), t("冲突"));
   stat(grid, String(snapshot.relays.filter((relay) => relay.lastFailure === null).length), t("可用中继"));
 }
@@ -734,6 +737,15 @@ function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerpri
     [t("序号"), String(peer.sequence)],
     [t("采集时间"), clockText(peer.collectedAt)],
   ]);
+}
+
+/** 十分钟内上报过即视为在线；中继不保存在线状态，只能按记录时间推断。 */
+function isOnline(collectedAt: string): boolean {
+  const then = Date.parse(collectedAt);
+  if (Number.isNaN(then)) {
+    return false;
+  }
+  return Date.now() - then <= 600_000;
 }
 
 /** 记录的新鲜度：一分钟内为新鲜，十分钟内为偏旧，更久为陈旧。 */

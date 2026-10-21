@@ -420,3 +420,25 @@
 .vault-wip-tabs {
   scrollbar-gutter: stable;
 }
+
+/* 本设备的身份信息：字号更小，与改动卡片分开。 */
+.vault-wip-self .vault-wip-table {
+  font-size: 0.78em;
+}
+
+/* 远端查询不是主要信息，字号再小一档。 */
+.vault-wip-remote .vault-wip-table {
+  font-size: 0.78em;
+}
+
+/* 概览底部的两个按钮均分整行，不再左对齐挤在一起。 */
+.vault-wip-actions-even {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5em;
+  margin-top: 0.8em;
+}
+
+.vault-wip-actions-even button {
+  width: 100%;
+}
