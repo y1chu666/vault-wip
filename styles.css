@@ -31,9 +31,57 @@
 
 .vault-wip-peer,
 .vault-wip-relay {
-  border-top: 1px solid var(--background-modifier-border);
-  margin-top: 0.6em;
-  padding-top: 0.4em;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  margin-bottom: 0.6em;
+  padding: 0.55em 0.7em;
+  background: var(--background-secondary);
+}
+
+.vault-wip-peer-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.vault-wip-dot {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  flex: none;
+}
+
+.vault-wip-dot.is-fresh {
+  background: var(--color-green);
+}
+
+.vault-wip-dot.is-stale {
+  background: var(--color-yellow);
+}
+
+.vault-wip-dot.is-old {
+  background: var(--text-faint);
+}
+
+.vault-wip-peer-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.vault-wip-peer-name {
+  font-weight: 600;
+}
+
+.vault-wip-peer-meta {
+  font-family: var(--font-monospace);
+  font-size: 0.78em;
+  color: var(--text-muted);
+}
+
+.vault-wip-revoke {
+  flex: none;
+  padding: 0.15em 0.5em;
+  font-size: 0.8em;
 }
 
 .vault-wip-actions {

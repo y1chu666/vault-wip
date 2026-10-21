@@ -605,21 +605,67 @@ function conflictLine(parent: HTMLElement, conflict: Conflict): void {
 /** 一台对端的状态。 */
 function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerprint: string) => void): void {
   const block = parent.createDiv({ cls: "vault-wip-peer" });
-  heading(block, displayName(peer));
+  const head = block.createDiv({ cls: "vault-wip-peer-head" });
+  head.createDiv({
+    cls: `vault-wip-dot ${freshnessClass(peer.collectedAt)}`,
+    attr: { title: peer.fingerprint },
+  });
+  const title = head.createDiv({ cls: "vault-wip-peer-title" });
+  title.createDiv({ cls: "vault-wip-peer-name", text: displayName(peer) });
+  title.createDiv({
+    cls: "vault-wip-peer-meta",
+    text: `${peer.fingerprint.slice(0, 12)}… · ${relativeTime(peer.collectedAt)}`,
+  });
+  const revoke = head.createEl("button", { cls: "vault-wip-revoke", text: t("吊销这台设备") });
+  revoke.onclick = () => {
+    onRevoke(peer.fingerprint);
+  };
+
   table(block, [
-    [t("指纹"), peer.fingerprint],
     [t("序号"), String(peer.sequence)],
-    [t("采集时间"), clockText(peer.collectedAt)],
+    [t("采集时间"), `${clockText(peer.collectedAt)}（${relativeTime(peer.collectedAt)}）`],
     [t("改动文件"), String(peer.payload.count)],
   ]);
   kindChips(block, peer.payload);
   groupedFiles(block, peer.payload.paths, peer.payload.kinds);
   suspectNotes(block, peer.payload);
-  const actions = block.createDiv({ cls: "vault-wip-actions" });
-  const button = actions.createEl("button", { text: t("吊销这台设备") });
-  button.onclick = () => {
-    onRevoke(peer.fingerprint);
-  };
+}
+
+/** 记录的新鲜度：一分钟内为新鲜，十分钟内为偏旧，更久为陈旧。 */
+function freshnessClass(collectedAt: string): string {
+  const then = Date.parse(collectedAt);
+  if (Number.isNaN(then)) {
+    return "is-old";
+  }
+  const seconds = (Date.now() - then) / 1000;
+  if (seconds <= 60) {
+    return "is-fresh";
+  }
+  if (seconds <= 600) {
+    return "is-stale";
+  }
+  return "is-old";
+}
+
+/** 相对时间：比绝对时刻更容易判断一条记录有多旧。 */
+function relativeTime(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) {
+    return iso;
+  }
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) {
+    return t("{count} 秒前", { count: seconds });
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return t("{count} 分钟前", { count: minutes });
+  }
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return t("{count} 小时前", { count: hours });
+  }
+  return t("{count} 天前", { count: Math.round(hours / 24) });
 }
 
 /** 一台中继的现状。 */

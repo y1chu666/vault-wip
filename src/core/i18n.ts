@@ -117,6 +117,10 @@ export const ENGLISH = {
   "对端设备": "Peers",
   "冲突": "Conflicts",
   "可用中继": "Relays online",
+  "{count} 秒前": "{count}s ago",
+  "{count} 分钟前": "{count} min ago",
+  "{count} 小时前": "{count} h ago",
+  "{count} 天前": "{count} d ago",
   "与对端的冲突": "Conflicts with other devices",
   "本设备已退役：需要重新注册才能继续使用。":
     "This device has been retired. Register again before using it.",
