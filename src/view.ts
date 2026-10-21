@@ -170,18 +170,22 @@ export class WipView extends ItemView {
       pane.createDiv({ text: t("本设备已退役：需要重新注册才能继续使用。") });
     }
 
-    heading(pane, t("本机改动"));
     if (snapshot.local === null) {
+      heading(pane, t("本机改动"));
       pane.createDiv({ text: t("尚未取得本机状态。") });
     } else {
       const local = snapshot.local;
-      table(pane, [
+      const card = pane.createDiv({ cls: "vault-wip-card" });
+      const head = card.createDiv({ cls: "vault-wip-card-head" });
+      head.createDiv({ cls: "vault-wip-card-title", text: t("本机改动") });
+      head.createDiv({ cls: "vault-wip-card-meta", text: snapshot.diagnostics.collectedAt === null ? "" : relativeTime(snapshot.diagnostics.collectedAt) });
+      table(card, [
         [t("改动文件"), String(local.count)],
         [t("清单是否截断"), local.truncated ? t("是") : t("否")],
       ]);
-      kindChips(pane, local);
-      groupedFiles(pane, local.paths, local.kinds);
-      suspectNotes(pane, local);
+      kindChips(card, local);
+      groupedFiles(card, local.paths, local.kinds);
+      suspectNotes(card, local);
     }
 
     heading(pane, t("各端改动"));

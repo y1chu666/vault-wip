@@ -392,3 +392,30 @@
   gap: 0.45em;
   margin: 0.4em 0 1em;
 }
+
+/* 本机改动独立成卡片，与设备信息、各端卡片区分开。 */
+.vault-wip-card {
+  margin-bottom: 0.6em;
+  padding: 0.55em 0.7em;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+
+.vault-wip-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6em;
+  margin-bottom: 0.35em;
+}
+
+.vault-wip-card-title {
+  font-weight: 600;
+}
+
+.vault-wip-card-meta {
+  font-family: var(--font-monospace);
+  font-size: 0.78em;
+  color: var(--text-muted);
+}
