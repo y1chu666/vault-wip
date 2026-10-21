@@ -168,10 +168,10 @@ export function conflictNotice(conflict: Conflict, total: number): Notice {
 
 function conflictHint(conflict: Conflict): string {
   if (conflict.localSuspect) {
-    return t("本地这边的差异看来只是行尾或权限位，可能无需处理。");
+    return t("本地这边的差异疑似只是行尾或权限位，可能无需处理。");
   }
   if (conflict.peerSuspect) {
-    return t("对端那边的差异看来只是行尾或权限位，可能无需处理。");
+    return t("对端那边的差异疑似只是行尾或权限位，可能无需处理。");
   }
   return "";
 }

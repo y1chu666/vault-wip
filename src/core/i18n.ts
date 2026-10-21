@@ -61,9 +61,9 @@ export const ENGLISH = {
   "{subject}在本地与{names}上都有未提交改动，提交或拉取之前请先确认。{hint}":
     "{subject} has uncommitted changes both here and on {names}. Please confirm before committing or pulling.{hint}",
   "「{path}」等 {count} 个文件": '"{path}" and {count} files in total',
-  "本地这边的差异看来只是行尾或权限位，可能无需处理。":
+  "本地这边的差异疑似只是行尾或权限位，可能无需处理。":
     " The difference on this side looks like line endings or permission bits only; it may need no action.",
-  "对端那边的差异看来只是行尾或权限位，可能无需处理。":
+  "对端那边的差异疑似只是行尾或权限位，可能无需处理。":
     " The difference on the other side looks like line endings or permission bits only; it may need no action.",
   "对端有未提交改动": "Another device has uncommitted changes",
   "{described}，开始编辑之前请先留意。": "{described}. Please keep that in mind before you start editing.",
@@ -147,11 +147,11 @@ export const ENGLISH = {
   "记录内容中的改动类型与文件清单长度不一致": "Change kinds in the record must match the path list length",
   "记录内容中含有不认识的改动类型": "The record contains an unknown change kind",
   "另有 {count} 个文件未列出。": "{count} more files are not listed.",
-  "{count} 个文件的差异看来只是行尾或权限位":
+  "{count} 个文件的差异疑似只是行尾或权限位":
     "The differences in {count} files look like line endings or permission bits only",
   "{count} 个文件留有合并冲突的痕迹": "{count} files still hold traces of a merge conflict",
   "{path}：与 {names} 的重叠{caution}": "{path}: overlaps with {names}{caution}",
-  "（其中一边的差异看来只是行尾或权限位）":
+  "（其中一边的差异疑似只是行尾或权限位）":
     " (the difference on one side looks like line endings or permission bits only)",
 
   // 状态视图：中继。
@@ -171,7 +171,7 @@ export const ENGLISH = {
   // 状态视图：诊断。
   "最近一次采集": "Last collection",
   "本机计数": "Local counter",
-  "序号由本设备自己推进，平时不必过问。只有在它已经无法继续推进时（例如上一条记录越过了可表示范围），才需要在这里重置；重置只改本机计数，中继上的数据一条不动。":
+  "序号由本设备自己推进，平时不必过问。只有在它已经无法继续推进时（例如上一条记录越过了可表示范围），才需要在这里重置；重置只改本机计数，不会改动中继上的任何数据。":
     "The sequence is advanced by this device alone and normally needs no attention. Reset it only when it can no longer advance, for instance when the previous record passed the representable range; a reset changes the local counter only and leaves the data on the relays untouched.",
   "重置本机计数": "Reset the local counter",
   "确认重置：下一次上报将从 1 重新对齐": "Confirm reset: the next report starts again from 1",

@@ -263,7 +263,7 @@ export class WipView extends ItemView {
     table(pane, [[t("已上报序号"), String(snapshot.sequence)]]);
     pane.createDiv({
       text: t(
-        "序号由本设备自己推进，平时不必过问。只有在它已经无法继续推进时（例如上一条记录越过了可表示范围），才需要在这里重置；重置只改本机计数，中继上的数据一条不动。",
+        "序号由本设备自己推进，平时不必过问。只有在它已经无法继续推进时（例如上一条记录越过了可表示范围），才需要在这里重置；重置只改本机计数，不会改动中继上的任何数据。",
       ),
     });
     const countRow = pane.createDiv({ cls: "vault-wip-actions" });
@@ -291,8 +291,10 @@ export class WipView extends ItemView {
 
     if (snapshot.diagnostics.dropped.length > 0) {
       heading(pane, t("被舍弃的记录"));
+      const droppedLog = pane.createDiv({ cls: "vault-wip-log" });
       for (const dropped of [...snapshot.diagnostics.dropped].reverse()) {
-        pane.createDiv({
+        droppedLog.createDiv({
+          cls: "vault-wip-log-line",
           text: t("{at} 设备 {fingerprint}：{reason}", {
             at: dropped.at,
             fingerprint: dropped.fingerprint.slice(0, 8),
@@ -304,8 +306,10 @@ export class WipView extends ItemView {
 
     if (snapshot.diagnostics.anomalies.length > 0) {
       heading(pane, t("序号异常"));
+      const anomalyLog = pane.createDiv({ cls: "vault-wip-log" });
       for (const anomaly of snapshot.diagnostics.anomalies) {
-        pane.createDiv({
+        anomalyLog.createDiv({
+          cls: "vault-wip-log-line",
           text: t("设备 {fingerprint} 在序号 {incoming} 上出现了与序号 {known} 不同的内容", {
             fingerprint: anomaly.fingerprint.slice(0, 8),
             incoming: anomaly.incomingSequence,
@@ -588,7 +592,7 @@ function suspectNotes(parent: HTMLElement, payload: StatusPayload): void {
   }
   const parts: string[] = [];
   if (payload.suspectFiles.length > 0) {
-    parts.push(t("{count} 个文件的差异看来只是行尾或权限位", { count: payload.suspectFiles.length }));
+    parts.push(t("{count} 个文件的差异疑似只是行尾或权限位", { count: payload.suspectFiles.length }));
   }
   if (payload.conflictFiles.length > 0) {
     parts.push(t("{count} 个文件留有合并冲突的痕迹", { count: payload.conflictFiles.length }));
@@ -600,7 +604,7 @@ function suspectNotes(parent: HTMLElement, payload: StatusPayload): void {
 function conflictLine(parent: HTMLElement, conflict: Conflict): void {
   const names = conflict.peers.map((peer) => peer.name).join(t("、"));
   const caution =
-    conflict.localSuspect || conflict.peerSuspect ? t("（其中一边的差异看来只是行尾或权限位）") : "";
+    conflict.localSuspect || conflict.peerSuspect ? t("（其中一边的差异疑似只是行尾或权限位）") : "";
   parent.createDiv({ text: t("{path}：与 {names} 的重叠{caution}", { path: conflict.path, names, caution }) });
 }
 
