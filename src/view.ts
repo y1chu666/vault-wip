@@ -461,10 +461,7 @@ export class WipView extends ItemView {
 
 /** 小节标题。 */
 function heading(parent: HTMLElement, text: string): HTMLElement {
-  const element = parent.createEl("h4", { text });
-  element.style.marginTop = "1em";
-  element.style.marginBottom = "0.35em";
-  return element;
+  return parent.createEl("h4", { text });
 }
 
 /** 一张两列的小表。 */
