@@ -249,10 +249,10 @@ export const ENGLISH = {
     "When on, files that still hold traces of a merge are called out separately; this changes the wording only, not whether something counts as a conflict.",
   "提醒": "Notifications",
   "持续故障的重提醒间隔": "Interval between repeated notices of an ongoing failure",
-  "只在中继持续联系不上时使用；0 表示只在故障开始时提醒一次。":
+  "仅在中继持续无法连通时使用；0 表示只在故障开始时提醒一次。":
     "Used only while a relay stays unreachable; 0 means to notify once when the failure starts.",
   "关闭重提醒": "no repeat notice",
-  "可以填多台；各中继之间互不相通，记录由本机搬运。传输级别与地址协议必须相符。":
+  "可填写多台；各中继之间互不相通，记录由本机转发。传输级别与地址协议必须相符。":
     "Several relays may be listed. Relays do not talk to each other, and this device carries records between them. The transport level must match the address scheme.",
   "第 {index} 台": "Relay {index}",
   "移除这一台": "Remove this one",

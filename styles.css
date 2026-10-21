@@ -348,3 +348,22 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* 设置页：分组之间留白，说明文字收小，与条目标题拉开层次。 */
+.vault-wip-settings .setting-item-heading {
+  margin-top: 1.4em;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.vault-wip-settings .setting-item-heading .setting-item-name {
+  font-size: 0.82em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.vault-wip-settings .setting-item-description {
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
