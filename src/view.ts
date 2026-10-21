@@ -283,8 +283,9 @@ export class WipView extends ItemView {
     if (snapshot.diagnostics.events.length === 0) {
       pane.createDiv({ text: t("尚无事件。") });
     } else {
+      const log = pane.createDiv({ cls: "vault-wip-log" });
       for (const event of [...snapshot.diagnostics.events].reverse()) {
-        pane.createDiv({ text: event });
+        log.createDiv({ cls: "vault-wip-log-line", text: event });
       }
     }
 
@@ -671,14 +672,21 @@ function relativeTime(iso: string): string {
 /** 一台中继的现状。 */
 function relayBlock(parent: HTMLElement, relay: RelayStatus): void {
   const block = parent.createDiv({ cls: "vault-wip-relay" });
-  heading(block, relay.name);
+  const head = block.createDiv({ cls: "vault-wip-peer-head" });
+  const state = relay.lastFailure !== null ? "is-bad" : relay.channelId === "" ? "is-old" : "is-fresh";
+  head.createDiv({ cls: `vault-wip-dot ${state}` });
+  const title = head.createDiv({ cls: "vault-wip-peer-title" });
+  title.createDiv({ cls: "vault-wip-peer-name", text: relay.name });
+  title.createDiv({ cls: "vault-wip-peer-meta", text: relay.url });
+
   table(block, [
-    [t("地址"), relay.url],
     [t("传输级别"), levelText(relay)],
     [t("频道标识"), relay.channelId === "" ? t("尚未注册") : relay.channelId],
     [t("最近一次成功"), clockText(relay.lastSuccessAt)],
-    [t("最近一次失败"), relay.lastFailure ?? t("无")],
   ]);
+  if (relay.lastFailure !== null) {
+    block.createDiv({ cls: "vault-wip-error", text: t("最近一次失败：{reason}", { reason: relay.lastFailure }) });
+  }
   if (relay.degraded) {
     const warn = block.createDiv({ cls: "vault-wip-warning" });
     warn.setText(t("这一级属于降级传输：注册、吊销与退役在此不可用。"));

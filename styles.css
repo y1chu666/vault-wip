@@ -295,3 +295,25 @@
   font-size: 0.78em;
   color: var(--text-muted);
 }
+
+.vault-wip-dot.is-bad {
+  background: var(--color-red);
+}
+
+/* 诊断事件：等宽、可滚动，长行自动折行。 */
+.vault-wip-log {
+  max-height: 18em;
+  overflow: auto;
+  padding: 0.5em 0.6em;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+
+.vault-wip-log-line {
+  font-family: var(--font-monospace);
+  font-size: 0.78em;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

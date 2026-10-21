@@ -108,6 +108,7 @@ export const ENGLISH = {
   "频道标识": "Channel id",
   "最近一次成功": "Last success",
   "最近一次失败": "Last failure",
+  "最近一次失败：{reason}": "Last failure: {reason}",
   "内容密钥标识": "Content key id",
   "本设备是否已退役": "Device retired",
 
