@@ -40,10 +40,14 @@ export default class VaultWipPlugin extends Plugin {
   private settingTab: WipSettingTab | null = null;
   private readonly views = new Set<WipView>();
 
-  override async onload(): Promise<void> {
+  override onload(): void {
     this.statusBar = this.addStatusBarItem();
 
-    await this.reload();
+    // 装配要读配置、生成密钥并跑一次 git 采集，放在加载流程里会让 Obsidian 判定超时。
+    // 先完成注册，再在后台装配；这段时间视图与设置页按「尚未就绪」处理。
+    void this.reload().catch((error: unknown) => {
+      new Notice(prefixed(describe(error)), 0);
+    });
 
     this.registerView(VIEW_TYPE, (leaf) => {
       const view = new WipView(leaf, this);
