@@ -550,6 +550,7 @@ function groupedFiles(parent: HTMLElement, paths: readonly string[], kinds: read
     }
     const details = parent.createEl("details", { cls: `vault-wip-group ${kind.cls}` });
     const summary = details.createEl("summary", { cls: "vault-wip-group-title" });
+    setIcon(summary.createEl("span", { cls: "vault-wip-chevron" }), "chevron-right");
     setIcon(summary.createEl("span", { cls: "vault-wip-kind-icon" }), kind.icon);
     summary.createEl("span", { text: kind.text(entries.length) });
 

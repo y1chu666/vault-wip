@@ -149,14 +149,35 @@
   display: flex;
   align-items: center;
   gap: 0.4em;
-  padding: 0.2em 0;
+  padding: 0.2em 0.3em;
+  border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
   user-select: none;
+  list-style: none;
+}
+
+.vault-wip-group-title::-webkit-details-marker {
+  display: none;
+}
+
+.vault-wip-group-title::marker {
+  content: "";
 }
 
 .vault-wip-group-title:hover {
   color: var(--text-accent);
+  background: var(--background-modifier-hover);
+}
+
+.vault-wip-chevron {
+  display: inline-flex;
+  color: var(--text-faint);
+  transition: transform 0.15s ease;
+}
+
+.vault-wip-group[open] .vault-wip-chevron {
+  transform: rotate(90deg);
 }
 
 .vault-wip-file {
