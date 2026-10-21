@@ -231,6 +231,11 @@ export class Engine {
     });
   }
 
+  /** 当前生效的配置；注册之后频道标识与令牌会写回这里。 */
+  get currentConfig(): Config {
+    return this.config;
+  }
+
   /** 换用一份新配置：中继、节奏与提醒都随之重建。 */
   setConfig(config: Config): void {
     this.config = config;
@@ -310,11 +315,28 @@ export class Engine {
   }
 
   /** 以注册凭证向各中继注册本仓库，成功的中继记下频道。 */
-  async register(credential: string): Promise<void> {
+  async register(credential: string): Promise<Config> {
     const failures: string[] = [];
+    const relays = this.config.relay.map((relay) => ({ ...relay }));
+    const byName = new Map(relays.map((relay) => [relay.name, relay]));
+
     for (const client of this.clients) {
+      const settings = byName.get(client.name);
+      if (settings === undefined) {
+        failures.push(`${client.name}：${t("配置里没有这台中继")}`);
+        continue;
+      }
       try {
-        const channel = await client.register(this.config.channel.alias, credential);
+        const channel = await client.register({
+          alias: this.config.channel.alias,
+          channelId: settings.channelId,
+          channelToken: settings.channelToken,
+          credential,
+        });
+        settings.channelId = channel.channelId;
+        if (channel.channelToken !== "") {
+          settings.channelToken = channel.channelToken;
+        }
         this.state.channels[client.name] = {
           channelId: channel.channelId,
           alias: channel.channelAlias,
@@ -326,6 +348,8 @@ export class Engine {
       }
     }
 
+    const updated: Config = { ...this.config, relay: relays };
+    this.setConfig(updated);
     if (failures.length < this.clients.length) {
       this.state.retired = false;
     }
@@ -334,6 +358,7 @@ export class Engine {
     if (failures.length > 0) {
       throw new StorageError(t("注册未全部完成：{failures}", { failures: failures.join(t("；")) }));
     }
+    return updated;
   }
 
   /** 吊销同一频道内的另一台设备，各中继都要报到。 */

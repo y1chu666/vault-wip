@@ -48,9 +48,9 @@ describe("注册", () => {
       relay.reply = { status: 200, body: { channel_id: "aa".repeat(16), channel_alias: "vault-example" } };
 
       const client = clientFor(relay, { level: "pinned", key });
-      const channel = await client.register("vault-example", "credential-for-tests");
+      const channel = await client.register({ alias: "vault-example", channelId: "", channelToken: "", credential: "credential-for-tests" });
 
-      expect(channel).toEqual({ channelId: "aa".repeat(16), channelAlias: "vault-example" });
+      expect(channel).toEqual({ channelId: "aa".repeat(16), channelAlias: "vault-example", channelToken: "" });
       expect(relay.requests[0]?.path).toBe("/v1/register");
       expect(relay.requests[0]?.signatureValid).toBe(true);
       expect(relay.requests[0]?.body["public_key"]).toBe(Buffer.from(key.publicKey).toString("base64"));
@@ -68,7 +68,7 @@ describe("注册", () => {
       relay.reply = { status: 200, body: { channel_id: "aa".repeat(16), channel_alias: "vault-example" } };
 
       const client = clientFor(relay, { level: "pinned", key });
-      await client.register("vault-example", "credential-for-tests");
+      await client.register({ alias: "vault-example", channelId: "", channelToken: "", credential: "credential-for-tests" });
 
       expect(client.pinned?.serverFingerprint).toBe(relay.serverKey.fingerprint);
       expect(client.pinned?.serverPublicKey).toBe(Buffer.from(relay.serverKey.publicKey).toString("base64"));
@@ -106,7 +106,7 @@ describe("注册", () => {
     try {
       const client = clientFor(relay, { level: "plaintext" });
 
-      await expect(client.register("vault-example", "credential-for-tests")).rejects.toThrow(
+      await expect(client.register({ alias: "vault-example", channelId: "", channelToken: "", credential: "credential-for-tests" })).rejects.toThrow(
         /不允许执行注册/,
       );
       expect(relay.requests).toHaveLength(0);
@@ -121,7 +121,7 @@ describe("注册", () => {
       relay.reply = { status: 200, body: { channel_alias: "vault-example" } };
       const client = clientFor(relay, { level: "plaintext" });
 
-      await expect(client.register("vault-example", "credential-for-tests")).rejects.toThrow(/注册/);
+      await expect(client.register({ alias: "vault-example", channelId: "", channelToken: "", credential: "credential-for-tests" })).rejects.toThrow(/注册/);
     } finally {
       await relay.close();
     }

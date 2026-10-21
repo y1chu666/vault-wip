@@ -303,12 +303,37 @@ export class WipSettingTab extends PluginSettingTab {
               });
             }),
         );
+
+      new Setting(this.containerEl)
+        .setName(t("频道标识"))
+        .setDesc(t("由中继生成，全局唯一；留空表示新建频道，填写表示加入这个频道。"))
+        .addText((text) =>
+          text
+            .setPlaceholder(t("留空以新建"))
+            .setValue(relay.channelId)
+            .onChange((value) => {
+              this.updateRelay(index, { channelId: value.trim() });
+            }),
+        );
+
+      new Setting(this.containerEl)
+        .setName(t("频道令牌"))
+        .setDesc(t("创建频道时只返回一次；加入已有频道时必须填写。"))
+        .addText((text) => {
+          text
+            .setPlaceholder(t("令牌"))
+            .setValue(relay.channelToken)
+            .onChange((value) => {
+              this.updateRelay(index, { channelToken: value.trim() });
+            });
+          text.inputEl.type = "password";
+        });
     });
 
     new Setting(this.containerEl).addButton((button) =>
       button.setButtonText(t("添加一台中继")).onClick(() => {
         this.edit((draft) => {
-          draft.relay = [...draft.relay, { name: "", url: "", transport: "https" }];
+          draft.relay = [...draft.relay, { name: "", url: "", transport: "https", channelId: "", channelToken: "" }];
         });
       }),
     );
@@ -333,7 +358,7 @@ export class WipSettingTab extends PluginSettingTab {
       })
       .addButton((button) =>
         button
-          .setButtonText(t("注册本仓库"))
+          .setButtonText(t("创建或加入频道"))
           .setCta()
           .onClick(() => {
             void this.plugin.registerChannel(this.credential);

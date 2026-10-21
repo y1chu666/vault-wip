@@ -111,7 +111,7 @@ async function fixture(options: {
   const base4 = defaultConfig("vault-example");
   const config = (options.configure ?? ((value: Config) => value))({
     ...base4,
-    relay: [{ name: relayName, url: relay.url, transport: level }],
+    relay: [{ name: relayName, url: relay.url, transport: level, channelId: "", channelToken: "" }],
   });
 
   if (options.register !== true) {
@@ -715,7 +715,7 @@ describe("配置与缓存", () => {
     try {
       env.engine.setConfig({
         ...defaultConfig("vault-example"),
-        relay: [{ name: "relay-b", url: other.url, transport: "plaintext" }],
+        relay: [{ name: "relay-b", url: other.url, transport: "plaintext", channelId: "", channelToken: "" }],
       });
 
       const snapshot = env.snapshot();

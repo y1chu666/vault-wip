@@ -73,6 +73,8 @@ describe("parseConfig", () => {
       name: "relay-a",
       url: "https://relay.example.com:8787",
       transport: "pinned",
+      channelId: "",
+      channelToken: "",
     });
   });
 

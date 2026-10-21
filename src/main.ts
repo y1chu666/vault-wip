@@ -5,7 +5,7 @@
 import { FileSystemAdapter, Notice, Plugin, getLanguage } from "obsidian";
 
 import type { Notice as EngineNotice } from "./core/alerts.js";
-import { parseConfig, templateConfig, type Config } from "./core/config.js";
+import { parseConfig, serializeConfig, templateConfig, type Config } from "./core/config.js";
 import { Engine, type EngineSnapshot } from "./core/engine.js";
 import { PLUGIN_NAME, getLocale, setLocale, t, type Locale } from "./core/i18n.js";
 import { pluginFiles, readTextFile, writeTextFile, type PluginFiles } from "./core/storage.js";
@@ -195,7 +195,11 @@ export default class VaultWipPlugin extends Plugin {
       return;
     }
     try {
-      await engine.register(credential);
+      const updated = await engine.register(credential);
+      this.currentValues = updated;
+      if (this.files !== null) {
+        await writeTextFile(this.files.config, serializeConfig(updated), 0o600);
+      }
       new Notice(prefixed(t("注册完成")));
     } catch (error) {
       new Notice(prefixed(describe(error)), 0);

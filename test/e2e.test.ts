@@ -93,7 +93,7 @@ async function device(port: number, label: string, name: string): Promise<Device
     ...defaultConfig(ALIAS),
     device: { name: label },
     relay: [
-      { name: "relay-a", url: `https://127.0.0.1:${String(port)}`, transport: "pinned" },
+      { name: "relay-a", url: `https://127.0.0.1:${String(port)}`, transport: "pinned", channelId: "", channelToken: "" },
     ],
   };
   const engine = await Engine.create({
@@ -189,6 +189,18 @@ describe.skipIf(!hasGo() || !existsSync(serverDirectory))("与真实中继的端
   });
 
   it("两台设备注册同一别名后进入同一频道", async () => {
+    // 新协议下不能靠同名自动并入：第二台要拿到第一台的频道标识与令牌。
+    const owner = first.engine.currentConfig.relay[0];
+    const current = second.engine.currentConfig;
+    second.engine.setConfig({
+      ...current,
+      relay: current.relay.map((relay) => ({
+        ...relay,
+        channelId: owner?.channelId ?? "",
+        channelToken: owner?.channelToken ?? "",
+      })),
+    });
+
     await second.engine.register(CREDENTIAL);
 
     expect(second.engine.snapshot().relays[0]?.channelId).toBe(

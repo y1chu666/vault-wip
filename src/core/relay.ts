@@ -52,6 +52,8 @@ export class RelayError extends Error {
 export interface RelayChannel {
   readonly channelId: string;
   readonly channelAlias: string;
+  /** 新建频道时服务端返回的令牌；加入已有频道时为空。 */
+  readonly channelToken: string;
 }
 
 /** 一条对端记录。 */
@@ -135,17 +137,33 @@ export class RelayClient {
     return this.pin;
   }
 
-  /** 注册本设备，取得频道。注册属于破坏性操作，降级传输下不做。 */
-  async register(channel: string, credential: string): Promise<RelayChannel> {
+  /**
+   * 注册本设备：频道标识为空时新建频道，否则加入已有频道。
+   *
+   * 注册属于破坏性操作，降级传输下不做。
+   */
+  async register(input: {
+    readonly alias: string;
+    readonly channelId: string;
+    readonly channelToken: string;
+    readonly credential: string;
+  }): Promise<RelayChannel> {
     this.refuseWhenDegraded("{relay}：当前传输级别属于降级，不允许执行注册");
-    const reply = await this.call<{ channel_id?: unknown; channel_alias?: unknown }>(REQUEST_PATHS.register, {
-      channel,
-      credential,
+    const reply = await this.call<{
+      channel_id?: unknown;
+      channel_alias?: unknown;
+      channel_token?: unknown;
+    }>(REQUEST_PATHS.register, {
+      alias: input.alias,
+      channel_id: input.channelId,
+      channel_token: input.channelToken,
+      credential: input.credential,
       public_key: Buffer.from(this.options.key.publicKey).toString("base64"),
     });
     return {
       channelId: readString(reply.channel_id, t("频道标识")),
       channelAlias: readString(reply.channel_alias, t("频道别名")),
+      channelToken: typeof reply.channel_token === "string" ? reply.channel_token : "",
     };
   }
 

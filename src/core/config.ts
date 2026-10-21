@@ -52,6 +52,10 @@ export interface RelaySettings {
   readonly url: string;
   /** 连接该中继使用的传输级别。 */
   readonly transport: TransportLevel;
+  /** 频道标识；创建或加入成功后写入，留空表示尚未确定。 */
+  readonly channelId: string;
+  /** 频道令牌；创建频道时得到，加入已有频道时需要填写。 */
+  readonly channelToken: string;
 }
 
 /** 采集配置。 */
@@ -207,6 +211,8 @@ export function serializeConfig(config: Config): string {
       name: relay.name,
       url: relay.url,
       transport: relay.transport,
+      channel_id: relay.channelId,
+      channel_token: relay.channelToken,
     })),
   };
 
@@ -229,7 +235,15 @@ export function defaultConfig(alias: string): Config {
     notify: { repeatSeconds: DEFAULT_REPEAT_SECONDS },
     ui: { language: "auto" },
     query: { remote: "" },
-    relay: [{ name: "example", url: "https://relay.example.com:8787", transport: "pinned" }],
+    relay: [
+      {
+        name: "example",
+        url: "https://relay.example.com:8787",
+        transport: "pinned",
+        channelId: "",
+        channelToken: "",
+      },
+    ],
   };
 }
 
@@ -483,10 +497,12 @@ function parseRelays(value: unknown, problems: string[]): RelaySettings[] {
       return;
     }
 
-    checkKeys(entry, ["name", "url", "transport"], where, problems);
+    checkKeys(entry, ["name", "url", "transport", "channel_id", "channel_token"], where, problems);
     const name = readString(entry, "name", where, problems) ?? "";
     const url = readString(entry, "url", where, problems) ?? "";
     const transport = readTransport(entry["transport"], where, problems);
+    const channelId = readString(entry, "channel_id", where, problems) ?? "";
+    const channelToken = readString(entry, "channel_token", where, problems) ?? "";
 
     if (name === "") {
       problems.push(t("{where}.name 不能为空", { where }));
@@ -503,7 +519,7 @@ function parseRelays(value: unknown, problems: string[]): RelaySettings[] {
     }
 
     if (transport !== undefined && name !== "" && url !== "") {
-      relays.push({ name, url, transport });
+      relays.push({ name, url, transport, channelId, channelToken });
     }
   });
 
