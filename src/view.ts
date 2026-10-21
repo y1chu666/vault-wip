@@ -184,6 +184,15 @@ export class WipView extends ItemView {
       suspectNotes(pane, local);
     }
 
+    heading(pane, t("各端改动"));
+    if (snapshot.peers.length === 0) {
+      pane.createDiv({ text: t("尚无可用的对端记录。") });
+    } else {
+      for (const peer of snapshot.peers) {
+        overviewPeer(pane, peer);
+      }
+    }
+
     heading(pane, t("与对端的冲突"));
     if (snapshot.conflicts.length === 0) {
       pane.createDiv({ text: t("没有发现两端改到同一个文件。") });
@@ -606,6 +615,22 @@ function conflictLine(parent: HTMLElement, conflict: Conflict): void {
   const caution =
     conflict.localSuspect || conflict.peerSuspect ? t("（其中一边的差异仅在行尾或权限位）") : "";
   parent.createDiv({ text: t("{path}：与 {names} 的重叠{caution}", { path: conflict.path, names, caution }) });
+}
+
+/** 概览里的一台对端：只看规模与时间，明细展开才出现。 */
+function overviewPeer(parent: HTMLElement, peer: DeviceStatus): void {
+  const block = parent.createDiv({ cls: "vault-wip-peer" });
+  const head = block.createDiv({ cls: "vault-wip-peer-head" });
+  head.createDiv({ cls: `vault-wip-dot ${freshnessClass(peer.collectedAt)}` });
+  const title = head.createDiv({ cls: "vault-wip-peer-title" });
+  title.createDiv({ cls: "vault-wip-peer-name", text: displayName(peer) });
+  title.createDiv({ cls: "vault-wip-peer-meta", text: relativeTime(peer.collectedAt) });
+  table(block, [
+    [t("改动文件"), String(peer.payload.count)],
+    [t("清单是否截断"), peer.payload.truncated ? t("是") : t("否")],
+  ]);
+  kindChips(block, peer.payload);
+  groupedFiles(block, peer.payload.paths, peer.payload.kinds);
 }
 
 /** 一台对端的状态。 */

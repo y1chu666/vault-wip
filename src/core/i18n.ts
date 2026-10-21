@@ -115,6 +115,8 @@ export const ENGLISH = {
   // 状态视图：概览。
   "本设备": "This device",
   "本机改动": "Local changes",
+  "各端改动": "Other devices",
+  "尚无可用的对端记录。": "No peer records yet.",
   "对端设备": "Peers",
   "冲突": "Conflicts",
   "可用中继": "Relays online",
