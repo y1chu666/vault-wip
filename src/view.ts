@@ -631,6 +631,7 @@ function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerpri
     [t("序号"), String(peer.sequence)],
     [t("采集时间"), `${clockText(peer.collectedAt)}（${relativeTime(peer.collectedAt)}）`],
     [t("改动文件"), String(peer.payload.count)],
+    [t("清单是否截断"), peer.payload.truncated ? t("是") : t("否")],
   ]);
   kindChips(block, peer.payload);
   groupedFiles(block, peer.payload.paths, peer.payload.kinds);
