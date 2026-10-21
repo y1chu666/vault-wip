@@ -18,6 +18,13 @@ type TabName = "overview" | "peers" | "relays" | "security" | "diagnostics";
 const TABS: readonly TabName[] = ["overview", "peers", "relays", "security", "diagnostics"];
 
 /**
+ * 分组是否展开，按「所属设备 + 改动类型」记录。
+ *
+ * 视图刷新会重建整块内容，若不记住这一状态，使用者每展开一次就会被折叠回去。
+ */
+const expandedGroups = new Map<string, boolean>();
+
+/**
  * 分栏标题。
  *
  * 文案随语言变化，因此不写死在分栏表里，每次重画时现取；这样切换语言之后
@@ -45,6 +52,8 @@ export class WipView extends ItemView {
   private tab: TabName = "overview";
   private readonly panes = new Map<TabName, HTMLElement>();
   private readonly tabButtons = new Map<TabName, HTMLButtonElement>();
+  /** 上一次画出的内容指纹；相同就不再重建，免得折叠状态与滚动位置被打断。 */
+  private lastSignature: string | null = null;
   private securityDynamic: HTMLElement | null = null;
   private securityBuilt = false;
   private confirmRetire = false;
@@ -98,6 +107,24 @@ export class WipView extends ItemView {
     return Promise.resolve();
   }
 
+  /** 内容指纹：只取会改变界面的部分，诊断事件的时间戳不参与。 */
+  private signature(snapshot: EngineSnapshot | null, error: string | null): string {
+    if (snapshot === null) {
+      return JSON.stringify({ tab: this.tab, error });
+    }
+    return JSON.stringify({
+      tab: this.tab,
+      error,
+      local: snapshot.local,
+      peers: snapshot.peers,
+      conflicts: snapshot.conflicts,
+      relays: snapshot.relays,
+      revoked: snapshot.revoked,
+      sequence: snapshot.sequence,
+      retired: snapshot.retired,
+    });
+  }
+
   /** 按当前现状重画一遍。 */
   render(): void {
     this.updateTabs();
@@ -107,6 +134,12 @@ export class WipView extends ItemView {
     for (const [name, pane] of this.panes) {
       pane.style.display = name === this.tab ? "block" : "none";
     }
+
+    const signature = this.signature(snapshot, error);
+    if (signature === this.lastSignature) {
+      return;
+    }
+    this.lastSignature = signature;
 
     if (this.tab === "security") {
       // 安全一栏里有输入框，重画会把使用者刚输入的口令抹掉，因此固定部分只建一次。
@@ -184,7 +217,7 @@ export class WipView extends ItemView {
         [t("清单是否截断"), local.truncated ? t("是") : t("否")],
       ]);
       kindChips(card, local);
-      groupedFiles(card, local.paths, local.kinds);
+      groupedFiles(card, local.paths, local.kinds, "local");
       suspectNotes(card, local);
     }
 
@@ -554,7 +587,12 @@ function kindChips(parent: HTMLElement, payload: StatusPayload): void {
 }
 
 /** 按类型分组的文件清单，每组默认折叠，文件多时不必先滚过一屏。 */
-function groupedFiles(parent: HTMLElement, paths: readonly string[], kinds: readonly string[]): void {
+function groupedFiles(
+  parent: HTMLElement,
+  paths: readonly string[],
+  kinds: readonly string[],
+  scope: string,
+): void {
   if (paths.length === 0) {
     parent.createDiv({ text: t("没有改动文件。") });
     return;
@@ -574,6 +612,11 @@ function groupedFiles(parent: HTMLElement, paths: readonly string[], kinds: read
       continue;
     }
     const details = parent.createEl("details", { cls: `vault-wip-group ${kind.cls}` });
+    const key = `${scope}:${kind.code}`;
+    details.open = expandedGroups.get(key) ?? false;
+    details.addEventListener("toggle", () => {
+      expandedGroups.set(key, details.open);
+    });
     const summary = details.createEl("summary", { cls: "vault-wip-group-title" });
     setIcon(summary.createEl("span", { cls: "vault-wip-chevron" }), "chevron-right");
     setIcon(summary.createEl("span", { cls: "vault-wip-kind-icon" }), kind.icon);
@@ -644,7 +687,7 @@ function overviewPeer(parent: HTMLElement, peer: DeviceStatus): void {
     [t("清单是否截断"), peer.payload.truncated ? t("是") : t("否")],
   ]);
   kindChips(block, peer.payload);
-  groupedFiles(block, peer.payload.paths, peer.payload.kinds);
+  groupedFiles(block, peer.payload.paths, peer.payload.kinds, `peer:${peer.fingerprint}`);
   suspectNotes(block, peer.payload);
 }
 
