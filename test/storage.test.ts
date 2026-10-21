@@ -278,6 +278,7 @@ describe("状态缓存", () => {
           truncated: false,
           paths: ["notes/a.md"],
           suspectFiles: [],
+          kinds: ["M"],
           conflictFiles: [],
         },
       },

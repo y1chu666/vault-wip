@@ -515,7 +515,7 @@ export class Engine {
     const collected = await collectStatus(this.runner, this.options.vaultRoot);
     return buildStatusPayload({
       label: this.config.device.name,
-      paths: collected.changes.map((change) => change.path),
+      changes: collected.changes,
       suspectFiles: collected.suspectFiles,
       conflictFiles: this.config.collect.detectConflictFiles ? collected.conflicted : [],
     });

@@ -11,6 +11,7 @@ import type { ContentKey } from "./crypto.js";
 import { DeviceKey } from "./identity.js";
 import type { DeviceStatus } from "./state.js";
 import { decodeText, encodeText } from "./text.js";
+import { CHANGE_CODES } from "./payload.js";
 import { t } from "./i18n.js";
 
 /** 状态缓存的格式版本。 */
@@ -352,7 +353,37 @@ function parsePayload(raw: Record<string, unknown>): DeviceStatus["payload"] | n
   if (pathList === null || suspects === null || conflicts === null) {
     return null;
   }
-  return { label, count, truncated, paths: pathList, suspectFiles: suspects, conflictFiles: conflicts };
+  const kinds = parseKinds(raw["kinds"], pathList.length);
+  if (kinds === null) {
+    return null;
+  }
+  return {
+    label,
+    count,
+    truncated,
+    paths: pathList,
+    kinds,
+    suspectFiles: suspects,
+    conflictFiles: conflicts,
+  };
+}
+
+function parseKinds(raw: unknown, expectedLength: number): string[] | null {
+  // 旧状态缓存没有这一项：按未知处理，路径照常显示。
+  if (raw === undefined) {
+    return Array.from({ length: expectedLength }, () => "");
+  }
+  if (!Array.isArray(raw) || raw.length !== expectedLength) {
+    return null;
+  }
+  const entries: string[] = [];
+  for (const entry of raw as unknown[]) {
+    if (typeof entry !== "string" || !(CHANGE_CODES as readonly string[]).includes(entry)) {
+      return null;
+    }
+    entries.push(entry);
+  }
+  return entries;
 }
 
 function parsePathList(raw: unknown): string[] | null {

@@ -9,10 +9,14 @@ import {
 } from "../src/core/payload.js";
 import { encodeText } from "../src/core/text.js";
 
-/** 一份典型内容：四类改动各占若干。 */
+/** 一份典型内容：三类改动，其中一条路径重复出现。 */
 const collected = {
   label: "示例设备甲",
-  paths: ["notes/a.md", "notes/b.md", "notes/a.md"],
+  changes: [
+    { path: "notes/a.md", kind: "added" },
+    { path: "notes/b.md", kind: "modified" },
+    { path: "notes/a.md", kind: "deleted" },
+  ],
   suspectFiles: ["notes/b.md"],
   conflictFiles: ["notes/c.md"],
 };
@@ -21,8 +25,11 @@ const collected = {
  * 拼一份内容文本。
  *
  * 各用例只写出关心的字段，其余取空值，免得每处都重复一遍完整形状。
+ * 没写 kinds 时按路径条数补空串，模拟旧版本写下的记录。
  */
 function raw(fields: Record<string, unknown>): Uint8Array {
+  const paths = fields["paths"];
+  const kinds = fields["kinds"] ?? (Array.isArray(paths) ? paths.map(() => "") : []);
   return encodeText(
     JSON.stringify({
       label: "",
@@ -32,6 +39,7 @@ function raw(fields: Record<string, unknown>): Uint8Array {
       suspectFiles: [],
       conflictFiles: [],
       ...fields,
+      kinds,
     }),
   );
 }
@@ -43,28 +51,34 @@ describe("buildStatusPayload", () => {
     expect(payload.label).toBe("示例设备甲");
     expect(payload.count).toBe(2);
     expect(payload.paths).toEqual(["notes/a.md", "notes/b.md"]);
+    expect(payload.kinds).toEqual(["A", "M"]);
     expect(payload.truncated).toBe(false);
     expect(payload.suspectFiles).toEqual(["notes/b.md"]);
     expect(payload.conflictFiles).toEqual(["notes/c.md"]);
   });
 
   it("清单过长时截断，但总数保持真实", () => {
-    const many = Array.from({ length: MAX_PATHS + 5 }, (_, index) => `notes/${String(index)}.md`);
-    const payload = buildStatusPayload({ label: "", paths: many, suspectFiles: [], conflictFiles: [] });
+    const changes = Array.from({ length: MAX_PATHS + 5 }, (_, index) => ({
+      path: `notes/${String(index)}.md`,
+      kind: "modified",
+    }));
+    const payload = buildStatusPayload({ label: "", changes, suspectFiles: [], conflictFiles: [] });
 
     expect(payload.count).toBe(MAX_PATHS + 5);
     expect(payload.paths).toHaveLength(MAX_PATHS);
+    expect(payload.kinds).toHaveLength(MAX_PATHS);
     expect(payload.truncated).toBe(true);
   });
 
   it("没有改动时给出空清单", () => {
-    const payload = buildStatusPayload({ label: "", paths: [], suspectFiles: [], conflictFiles: [] });
+    const payload = buildStatusPayload({ label: "", changes: [], suspectFiles: [], conflictFiles: [] });
 
     expect(payload).toEqual({
       label: "",
       count: 0,
       truncated: false,
       paths: [],
+      kinds: [],
       suspectFiles: [],
       conflictFiles: [],
     });
@@ -100,6 +114,34 @@ describe("encodeStatusPayload 与 decodeStatusPayload", () => {
     expect(() => decodeStatusPayload(raw({ count: -1 }))).toThrow(/改动文件数不合规/);
     expect(() => decodeStatusPayload(raw({ truncated: 1 }))).toThrow(/截断标记不合规/);
     expect(() => decodeStatusPayload(raw({ paths: "a.md" }))).toThrow(/paths 应当是数组/);
+    expect(() => decodeStatusPayload(raw({ kinds: "A" }))).toThrow(/改动类型应当是数组/);
+  });
+
+  it("旧记录没有改动类型时按未知处理", () => {
+    const bytes = encodeText(
+      JSON.stringify({
+        label: "",
+        count: 1,
+        truncated: false,
+        paths: ["notes/a.md"],
+        suspectFiles: [],
+        conflictFiles: [],
+      }),
+    );
+
+    expect(decodeStatusPayload(bytes).kinds).toEqual([""]);
+  });
+
+  it("拒绝长度不一致或含未知代码的改动类型", () => {
+    expect(() =>
+      decodeStatusPayload(raw({ count: 2, paths: ["a.md", "b.md"], kinds: ["A"] })),
+    ).toThrow(/长度不一致/);
+    expect(() => decodeStatusPayload(raw({ count: 1, paths: ["a.md"], kinds: ["X"] }))).toThrow(
+      /不认识的改动类型/,
+    );
+    expect(() => decodeStatusPayload(raw({ count: 1, paths: ["a.md"], kinds: [1] }))).toThrow(
+      /不认识的改动类型/,
+    );
   });
 
   it("拒绝不合规的设备名称", () => {

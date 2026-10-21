@@ -15,6 +15,19 @@ const MAX_PATH_LENGTH = 4096;
 /** 设备名称长度上限，与配置里的上限一致。 */
 const MAX_LABEL_LENGTH = 64;
 
+/** 改动类型到单字母的映射；未知类型留空，界面按「其他」处理。 */
+const KIND_CODES: Readonly<Record<string, string>> = {
+  added: "A",
+  modified: "M",
+  deleted: "D",
+  renamed: "R",
+  unmerged: "U",
+  untracked: "?",
+};
+
+/** 允许出现在记录里的改动类型代码。 */
+export const CHANGE_CODES = ["A", "M", "D", "R", "U", "?", ""] as const;
+
 /** 状态记录的内容。 */
 export interface StatusPayload {
   /** 本设备名称，由本设备自己写下；中继看不到它。 */
@@ -25,6 +38,12 @@ export interface StatusPayload {
   readonly truncated: boolean;
   /** 归一后的文件名清单。 */
   readonly paths: readonly string[];
+  /**
+   * 与 paths 一一对应的改动类型：A 新增、M 修改、D 删除、R 重命名、U 冲突、? 未跟踪。
+   *
+   * 空串表示类型未知，只有旧版本写下的记录才会出现。
+   */
+  readonly kinds: readonly string[];
   /** 疑似假冲突的文件：差异只是行尾或权限位。 */
   readonly suspectFiles: readonly string[];
   /** 检出冲突残留的文件。 */
@@ -42,11 +61,21 @@ export class StatusPayloadError extends Error {
 /** 由采集结果构造内容，并按上限截断文件名清单。 */
 export function buildStatusPayload(collected: {
   readonly label: string;
-  readonly paths: readonly string[];
+  readonly changes: readonly { readonly path: string; readonly kind: string }[];
   readonly suspectFiles: readonly string[];
   readonly conflictFiles: readonly string[];
 }): StatusPayload {
-  const paths = [...new Set(collected.paths)];
+  const seen = new Set<string>();
+  const paths: string[] = [];
+  const kinds: string[] = [];
+  for (const change of collected.changes) {
+    if (seen.has(change.path)) {
+      continue;
+    }
+    seen.add(change.path);
+    paths.push(change.path);
+    kinds.push(KIND_CODES[change.kind] ?? "");
+  }
   const truncated = paths.length > MAX_PATHS;
 
   return {
@@ -54,6 +83,7 @@ export function buildStatusPayload(collected: {
     count: paths.length,
     truncated,
     paths: truncated ? paths.slice(0, MAX_PATHS) : paths,
+    kinds: truncated ? kinds.slice(0, MAX_PATHS) : kinds,
     suspectFiles: [...new Set(collected.suspectFiles)],
     conflictFiles: [...new Set(collected.conflictFiles)],
   };
@@ -67,6 +97,7 @@ export function encodeStatusPayload(payload: StatusPayload): Uint8Array {
       count: payload.count,
       truncated: payload.truncated,
       paths: payload.paths,
+      kinds: payload.kinds,
       suspectFiles: payload.suspectFiles,
       conflictFiles: payload.conflictFiles,
     }),
@@ -92,7 +123,7 @@ export function decodeStatusPayload(bytes: Uint8Array): StatusPayload {
   }
 
   const table = raw as Record<string, unknown>;
-  const allowed = ["label", "count", "truncated", "paths", "suspectFiles", "conflictFiles"];
+  const allowed = ["label", "count", "truncated", "paths", "kinds", "suspectFiles", "conflictFiles"];
   for (const key of Object.keys(table)) {
     if (!allowed.includes(key)) {
       throw new StatusPayloadError(t("记录内容中不认识的字段：{field}", { field: key }));
@@ -126,6 +157,7 @@ export function decodeStatusPayload(bytes: Uint8Array): StatusPayload {
     count,
     truncated,
     paths,
+    kinds: readKinds(table["kinds"], paths.length),
     suspectFiles: readPaths(table["suspectFiles"], "suspectFiles"),
     conflictFiles: readPaths(table["conflictFiles"], "conflictFiles"),
   };
@@ -159,4 +191,28 @@ function readPaths(value: unknown, field: string): string[] {
     }
   }
   return paths;
+}
+
+/**
+ * 读取与路径一一对应的改动类型。
+ *
+ * 旧版本写下的记录没有这一项：按未知处理，路径照常显示，不让整条记录作废。
+ */
+function readKinds(value: unknown, expectedLength: number): string[] {
+  if (value === undefined) {
+    return Array.from({ length: expectedLength }, () => "");
+  }
+  if (!Array.isArray(value)) {
+    throw new StatusPayloadError(t("记录内容中的改动类型应当是数组"));
+  }
+  if (value.length !== expectedLength) {
+    throw new StatusPayloadError(t("记录内容中的改动类型与文件清单长度不一致"));
+  }
+
+  return value.map((entry) => {
+    if (typeof entry !== "string" || !(CHANGE_CODES as readonly string[]).includes(entry)) {
+      throw new StatusPayloadError(t("记录内容中含有不认识的改动类型"));
+    }
+    return entry;
+  });
 }

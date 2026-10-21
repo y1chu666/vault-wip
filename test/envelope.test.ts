@@ -130,7 +130,7 @@ describe("recordSigningText", () => {
     });
 
     expect(text.split("\n")).toEqual([
-      "wip-relay-record-v1",
+      "wip-relay-record-v2",
       "0f8c1a2b3c4d5e6f708192a3b4c5d6e7",
       key.fingerprint,
       "7",

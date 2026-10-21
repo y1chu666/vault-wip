@@ -19,6 +19,7 @@ function payload(overrides: Partial<StatusPayload> = {}): StatusPayload {
     count: 0,
     truncated: false,
     paths: [],
+    kinds: [],
     suspectFiles: [],
     conflictFiles: [],
     ...overrides,

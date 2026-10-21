@@ -56,6 +56,7 @@ export function statusContent(label: string, paths: readonly string[]): StatusPa
     count: paths.length,
     truncated: false,
     paths: [...paths],
+    kinds: paths.map(() => "M"),
     suspectFiles: [],
     conflictFiles: [],
   };

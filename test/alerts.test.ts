@@ -14,7 +14,7 @@ import type { StatusPayload } from "../src/core/payload.js";
 import type { Conflict, DeviceStatus } from "../src/core/state.js";
 
 function payload(overrides: Partial<StatusPayload> = {}): StatusPayload {
-  return { label: "", count: 0, truncated: false, paths: [], suspectFiles: [], conflictFiles: [], ...overrides };
+  return { label: "", count: 0, truncated: false, paths: [], kinds: [], suspectFiles: [], conflictFiles: [], ...overrides };
 }
 
 function device(fingerprint: string, overrides: Partial<DeviceStatus> = {}): DeviceStatus {

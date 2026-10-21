@@ -182,7 +182,8 @@ export class WipView extends ItemView {
         [t("改动文件"), String(local.count)],
         [t("清单是否截断"), local.truncated ? t("是") : t("否")],
       ]);
-      pathList(pane, local.paths);
+      kindSummary(pane, local);
+      pathList(pane, local.paths, local.kinds);
       suspectNotes(pane, local);
     }
 
@@ -476,14 +477,53 @@ function table(parent: HTMLElement, rows: readonly (readonly [string, string])[]
   }
 }
 
-/** 一段文件名清单，过长时只列前若干条。 */
-function pathList(parent: HTMLElement, paths: readonly string[]): void {
+/** 改动类型的显示符号。 */
+const KIND_MARKS: Readonly<Record<string, string>> = {
+  A: "+",
+  M: "~",
+  D: "-",
+  R: "→",
+  U: "!",
+  "?": "?",
+};
+
+/** 按类型汇总改动，让人一眼看出新增、修改与删除各有多少。 */
+function kindSummary(parent: HTMLElement, payload: StatusPayload): void {
+  const counts = new Map<string, number>();
+  for (const kind of payload.kinds) {
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  }
+
+  const parts: string[] = [];
+  const groups: readonly { readonly code: string; readonly text: (count: number) => string }[] = [
+    { code: "A", text: (count) => t("新增 {count} 个", { count }) },
+    { code: "M", text: (count) => t("修改 {count} 个", { count }) },
+    { code: "D", text: (count) => t("删除 {count} 个", { count }) },
+    { code: "R", text: (count) => t("重命名 {count} 个", { count }) },
+    { code: "U", text: (count) => t("冲突 {count} 个", { count }) },
+    { code: "?", text: (count) => t("未跟踪 {count} 个", { count }) },
+    { code: "", text: (count) => t("类型未知 {count} 个", { count }) },
+  ];
+  for (const group of groups) {
+    const count = counts.get(group.code) ?? 0;
+    if (count > 0) {
+      parts.push(group.text(count));
+    }
+  }
+  if (parts.length > 0) {
+    parent.createDiv({ text: parts.join(t("、")) });
+  }
+}
+
+/** 一段文件名清单，过长时只列前若干条；每行前面带改动类型标记。 */
+function pathList(parent: HTMLElement, paths: readonly string[], kinds: readonly string[]): void {
   if (paths.length === 0) {
     parent.createDiv({ text: t("没有改动文件。") });
     return;
   }
-  for (const path of paths.slice(0, MAX_LISTED_PATHS)) {
-    parent.createDiv({ text: path });
+  for (const [index, path] of paths.slice(0, MAX_LISTED_PATHS).entries()) {
+    const mark = KIND_MARKS[kinds[index] ?? ""] ?? "·";
+    parent.createDiv({ text: `${mark} ${path}` });
   }
   if (paths.length > MAX_LISTED_PATHS) {
     parent.createDiv({ text: t("另有 {count} 个文件未列出。", { count: paths.length - MAX_LISTED_PATHS }) });
@@ -523,7 +563,7 @@ function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerpri
     [t("采集时间"), clockText(peer.collectedAt)],
     [t("改动文件"), String(peer.payload.count)],
   ]);
-  pathList(block, peer.payload.paths);
+  pathList(block, peer.payload.paths, peer.payload.kinds);
   suspectNotes(block, peer.payload);
   const actions = block.createDiv({ cls: "vault-wip-actions" });
   const button = actions.createEl("button", { text: t("吊销这台设备") });
