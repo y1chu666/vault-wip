@@ -8,7 +8,7 @@ import type { Notice as EngineNotice } from "./core/alerts.js";
 import { parseConfig, serializeConfig, templateConfig, type Config } from "./core/config.js";
 import { Engine, type EngineSnapshot } from "./core/engine.js";
 import { PLUGIN_NAME, getLocale, setLocale, t, type Locale } from "./core/i18n.js";
-import { pluginFiles, readTextFile, writeTextFile, type PluginFiles } from "./core/storage.js";
+import { loadState, pluginFiles, readTextFile, writeTextFile, type PluginFiles } from "./core/storage.js";
 import { WipSettingTab } from "./settings.js";
 import { VIEW_TYPE, WipView } from "./view.js";
 
@@ -162,6 +162,21 @@ export default class VaultWipPlugin extends Plugin {
       this.engine = null;
       this.refresh();
       return;
+    }
+
+    // 升级前的配置没有频道标识，标识只存在于状态缓存里；这里补回配置文件，
+    // 免得设置页显示为空，使用者误以为尚未注册而重新建一个频道。
+    const stored = await loadState(files.state);
+    const relay = config.relay.map((entry) => {
+      const known = stored?.channels[entry.name];
+      if (entry.channelId === "" && known !== undefined) {
+        return { ...entry, channelId: known.channelId };
+      }
+      return entry;
+    });
+    if (relay.some((entry, index) => entry.channelId !== config.relay[index]?.channelId)) {
+      config = { ...config, relay };
+      await writeTextFile(files.config, serializeConfig(config), 0o600);
     }
 
     this.configError = null;
