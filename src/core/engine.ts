@@ -525,7 +525,13 @@ export class Engine {
     this.refreshConflicts();
     this.emitNotices();
     // 远端查询排在最后：它只影响本机界面，不该拖慢上报，也不该参与冲突判断。
-    if (remoteQueryDue(this.remoteQueriedAt?.getTime() ?? null, this.now().getTime())) {
+    if (
+      remoteQueryDue(
+        this.remoteQueriedAt?.getTime() ?? null,
+        this.now().getTime(),
+        this.config.query.intervalSeconds,
+      )
+    ) {
       await this.queryRemote();
     }
     this.options.onChange?.();

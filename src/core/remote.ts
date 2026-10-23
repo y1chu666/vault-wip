@@ -10,9 +10,6 @@ import { firstLine, type CommandRunner } from "./git.js";
 import { t } from "./i18n.js";
 import { decodeText } from "./text.js";
 
-/** 两次自动查询之间至少隔这么久；手工点的按钮不受此限。 */
-export const REMOTE_QUERY_INTERVAL_MS = 10 * 60 * 1000;
-
 /** 一笔提交的标识：四十位小写十六进制。 */
 const HASH_PATTERN = /^[0-9a-f]{40}$/;
 
@@ -172,9 +169,16 @@ export function refName(where: { readonly remote: string; readonly branch: strin
   return `${where.remote}/${where.branch}`;
 }
 
-/** 距上次查询是否已经够久，够久才值得自动再问一次。 */
-export function remoteQueryDue(lastCheckedAt: number | null, now: number): boolean {
-  return lastCheckedAt === null || now - lastCheckedAt >= REMOTE_QUERY_INTERVAL_MS;
+/** 距上次查询是否已经够久，够久才值得自动再问一次；间隔为 0 表示不自动查询。 */
+export function remoteQueryDue(
+  lastCheckedAt: number | null,
+  now: number,
+  intervalSeconds: number,
+): boolean {
+  if (intervalSeconds <= 0) {
+    return false;
+  }
+  return lastCheckedAt === null || now - lastCheckedAt >= intervalSeconds * 1000;
 }
 
 /** 读出远端地址；读不出来时返回 null。 */

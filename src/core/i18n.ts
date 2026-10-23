@@ -579,6 +579,8 @@ export const ENGLISH = {
   // 配置：远端查询一项。
   "远端查询用的远端名，例如 origin；留空表示用当前分支的上游。":
     "Remote name to query, for example origin; leave empty to use the upstream of the current branch.",
+  "自动查询远端的最短间隔（秒），0 表示不自动查询。":
+    "Shortest interval between automatic remote queries (seconds); 0 means do not query automatically.",
   "query 应当是一张表": "query should be a table",
   "query.remote 最长 {limit} 个字符": "query.remote may be at most {limit} characters",
   "query.remote 不能含有控制字符": "query.remote cannot hold control characters",
@@ -611,6 +613,9 @@ export const ENGLISH = {
   "上次查询": "Last query",
   "查询远端": "Query the remote",
   "查询用的远端": "Remote to query",
+  "自动查询间隔": "Interval between automatic remote queries",
+  "查询只影响本机显示；0 表示不自动查询，仍可按「查询远端」手动查。":
+    "The query only affects what this machine shows; 0 means no automatic query, and the \"Query the remote\" button still works.",
   "请填 {minimum} 秒到 {maximum} 天之间的整数。":
     "Enter a whole number from {minimum} seconds to {maximum} days.",
   "填写要查询的远端名，例如 origin；留空表示用当前分支的上游。查询只向远端问一下两边各有哪些提交，既不拉取也不改动本机引用，结果只在本机界面上显示。":

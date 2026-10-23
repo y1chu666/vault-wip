@@ -912,7 +912,7 @@ describe("远端查询", () => {
 
   it("指定远端之后能查出两边一致", async () => {
     const env = await fixture({
-      configure: (config) => ({ ...config, query: { remote: "origin" } }),
+      configure: (config) => ({ ...config, query: { ...config.query, remote: "origin" } }),
     });
     // 拿一个裸仓库当远端，推一次之后两边就指向同一笔提交。
     const bare = temporaryDir("vault-wip-remote-");
@@ -983,7 +983,7 @@ describe("远端查询", () => {
 /** 备好一个仓库、一个裸远端，并让另一台设备往远端推一笔本机还没有的提交。 */
 async function pushFromAnotherDevice(): Promise<Fixture> {
   const env = await fixture({
-    configure: (config) => ({ ...config, query: { remote: "origin" } }),
+    configure: (config) => ({ ...config, query: { ...config.query, remote: "origin" } }),
   });
   const bare = temporaryDir("vault-wip-remote-");
   execFileSync("git", ["init", "-q", "--bare", "-b", "main", bare], { stdio: "ignore" });

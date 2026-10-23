@@ -34,6 +34,8 @@ export const DEFAULT_IDLE_INTERVAL_SECONDS = 60;
 export const DEFAULT_REPEAT_SECONDS = 600;
 /** 冲突仍在时的默认重提醒间隔（秒）。 */
 export const DEFAULT_CONFLICT_REPEAT_SECONDS = 600;
+/** 默认的远端查询间隔（秒）。 */
+export const DEFAULT_QUERY_INTERVAL_SECONDS = 600;
 
 const MAX_RELAYS = 8;
 const MAX_ALIAS_LENGTH = 64;
@@ -77,6 +79,8 @@ export interface CollectSettings {
 export interface QuerySettings {
   /** 要查询的远端名；留空表示用当前分支的上游。 */
   readonly remote: string;
+  /** 自动查询的最短间隔（秒）；0 表示不自动查询。 */
+  readonly intervalSeconds: number;
 }
 
 /** 界面配置。 */
@@ -210,6 +214,7 @@ export function serializeConfig(config: Config): string {
     },
     query: {
       remote: config.query.remote,
+      interval_seconds: config.query.intervalSeconds,
     },
     relay: config.relay.map((relay) => ({
       name: relay.name,
@@ -238,7 +243,7 @@ export function defaultConfig(alias: string): Config {
     },
     notify: { repeatSeconds: DEFAULT_REPEAT_SECONDS, conflictRepeatSeconds: DEFAULT_CONFLICT_REPEAT_SECONDS },
     ui: { language: "auto" },
-    query: { remote: "" },
+    query: { remote: "", intervalSeconds: DEFAULT_QUERY_INTERVAL_SECONDS },
     relay: [
       {
         name: "example",
@@ -301,6 +306,8 @@ language = "auto"
 [query]
 # ${t("远端查询用的远端名，例如 origin；留空表示用当前分支的上游。")}
 remote = ""
+# ${t("自动查询远端的最短间隔（秒），0 表示不自动查询。")}
+interval_seconds = ${DEFAULT_QUERY_INTERVAL_SECONDS}
 
 # ${t("中继可以有多个，重复写若干段 [[relay]] 即可。")}
 # ${t("transport 可取 {choices}；后两级的通信不加密或可被冒充，", { choices: TRANSPORT_LEVELS.join(separator) })}
@@ -467,7 +474,7 @@ function parseUi(value: unknown, problems: string[]): UiSettings {
 }
 
 function parseQuery(value: unknown, problems: string[]): QuerySettings {
-  const fallback: QuerySettings = { remote: "" };
+  const fallback: QuerySettings = { remote: "", intervalSeconds: DEFAULT_QUERY_INTERVAL_SECONDS };
   if (value === undefined) {
     return fallback;
   }
@@ -476,8 +483,16 @@ function parseQuery(value: unknown, problems: string[]): QuerySettings {
     return fallback;
   }
 
-  checkKeys(value, ["remote"], "query", problems);
+  checkKeys(value, ["remote", "interval_seconds"], "query", problems);
   const remote = readString(value, "remote", "query", problems) ?? fallback.remote;
+  const intervalSeconds = readInterval(
+    value,
+    "interval_seconds",
+    "query",
+    fallback.intervalSeconds,
+    problems,
+    0,
+  );
   if (remote.length > MAX_REMOTE_NAME_LENGTH) {
     problems.push(t("query.remote 最长 {limit} 个字符", { limit: MAX_REMOTE_NAME_LENGTH }));
   } else if (containsControlCharacter(remote)) {
@@ -486,7 +501,7 @@ function parseQuery(value: unknown, problems: string[]): QuerySettings {
     // 以短横线开头的名字会被 git 当成选项，而远端名只需是个名字。
     problems.push(t("query.remote 不能以短横线开头"));
   }
-  return { remote };
+  return { remote, intervalSeconds };
 }
 
 function parseRelays(value: unknown, problems: string[]): RelaySettings[] {

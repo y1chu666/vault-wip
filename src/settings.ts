@@ -230,10 +230,23 @@ export class WipSettingTab extends PluginSettingTab {
           .setValue(config.query.remote)
           .onChange((value) => {
             this.edit((draft) => {
-              draft.query = { remote: value.trim() };
+              draft.query = { ...draft.query, remote: value.trim() };
             });
           }),
       );
+
+    addDuration(
+      new Setting(this.containerEl)
+        .setName(t("自动查询间隔"))
+        .setDesc(t("查询只影响本机显示；0 表示不自动查询，仍可按「查询远端」手动查。")),
+      config.query.intervalSeconds,
+      0,
+      (seconds) => {
+        this.edit((draft) => {
+          draft.query = { ...draft.query, intervalSeconds: seconds };
+        });
+      },
+    );
   }
 
   private renderNotify(config: Config): void {

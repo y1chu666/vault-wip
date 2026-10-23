@@ -6,6 +6,7 @@ import {
   DEFAULT_IDLE_AFTER_SECONDS,
   DEFAULT_IDLE_INTERVAL_SECONDS,
   DEFAULT_INTERVAL_SECONDS,
+  DEFAULT_QUERY_INTERVAL_SECONDS,
   DEFAULT_REPEAT_SECONDS,
   MAX_INTERVAL_SECONDS,
   defaultConfig,
@@ -70,6 +71,7 @@ describe("parseConfig", () => {
     });
     expect(config.notify.repeatSeconds).toBe(DEFAULT_REPEAT_SECONDS);
     expect(config.notify.conflictRepeatSeconds).toBe(600);
+    expect(config.query).toEqual({ remote: "", intervalSeconds: DEFAULT_QUERY_INTERVAL_SECONDS });
     expect(config.relay).toHaveLength(1);
     expect(config.relay[0]).toEqual({
       name: "relay-a",
@@ -365,12 +367,28 @@ describe("界面语言", () => {
 });
 
 describe("远端查询设置", () => {
-  it("不写这一节时不去查任何远端", () => {
-    expect(parsed(minimal).query).toEqual({ remote: "" });
+  it("不写这一节时不去查任何远端，默认十分钟查一次", () => {
+    expect(parsed(minimal).query).toEqual({ remote: "", intervalSeconds: DEFAULT_QUERY_INTERVAL_SECONDS });
   });
 
   it("可以指定一个远端名", () => {
     expect(parsed(`${channelBlock}[query]\nremote = "mirror"\n${relayBlock}`).query.remote).toBe("mirror");
+  });
+
+  it("自动查询间隔可以自行填写，0 表示不自动查询", () => {
+    expect(parsed(`${channelBlock}[query]\ninterval_seconds = 7200\n${relayBlock}`).query.intervalSeconds).toBe(
+      7200,
+    );
+    expect(parsed(`${channelBlock}[query]\ninterval_seconds = 0\n${relayBlock}`).query.intervalSeconds).toBe(0);
+  });
+
+  it("拒绝超出范围的自动查询间隔", () => {
+    expect(
+      failure(`${channelBlock}[query]\ninterval_seconds = ${MAX_INTERVAL_SECONDS + 1}\n${relayBlock}`),
+    ).toContain("query.interval_seconds 应当介于");
+    expect(failure(`${channelBlock}[query]\ninterval_seconds = -1\n${relayBlock}`)).toContain(
+      "query.interval_seconds",
+    );
   });
 
   it("拒绝过长的远端名", () => {
@@ -401,11 +419,17 @@ describe("远端查询设置", () => {
 
   it("写回之后仍然认得出这一项", () => {
     const before = defaultConfig("vault-example");
-    const withRemote: Config = { ...before, query: { remote: "mirror" } };
-    expect(parsed(serializeConfig(withRemote)).query.remote).toBe("mirror");
+    const withRemote: Config = {
+      ...before,
+      query: { remote: "mirror", intervalSeconds: 1800 },
+    };
+    const written = parsed(serializeConfig(withRemote)).query;
+    expect(written.remote).toBe("mirror");
+    expect(written.intervalSeconds).toBe(1800);
   });
 
   it("首次生成的配置里带上这一项", () => {
     expect(templateConfig("vault-example")).toContain("[query]");
+    expect(templateConfig("vault-example")).toContain(`interval_seconds = ${DEFAULT_QUERY_INTERVAL_SECONDS}`);
   });
 });

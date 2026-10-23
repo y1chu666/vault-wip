@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { CommandResult, CommandRunner } from "../src/core/git.js";
 import {
   QUERY_DIRECTORY,
-  REMOTE_QUERY_INTERVAL_MS,
   parseLsRemote,
   queryRemote,
   refName,
@@ -372,8 +371,13 @@ describe("远端查询的显示", () => {
   });
 
   it("两次自动查询之间隔得够久才再问一次", () => {
-    expect(remoteQueryDue(null, 1_000)).toBe(true);
-    expect(remoteQueryDue(1_000, 1_000 + REMOTE_QUERY_INTERVAL_MS - 1)).toBe(false);
-    expect(remoteQueryDue(1_000, 1_000 + REMOTE_QUERY_INTERVAL_MS)).toBe(true);
+    expect(remoteQueryDue(null, 1_000, 600)).toBe(true);
+    expect(remoteQueryDue(1_000, 1_000 + 600_000 - 1, 600)).toBe(false);
+    expect(remoteQueryDue(1_000, 1_000 + 600_000, 600)).toBe(true);
+  });
+
+  it("间隔为 0 时不自动查询", () => {
+    expect(remoteQueryDue(null, 1_000, 0)).toBe(false);
+    expect(remoteQueryDue(1_000, 1_000_000, 0)).toBe(false);
   });
 });
