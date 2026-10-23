@@ -7,6 +7,7 @@ import {
   DEFAULT_IDLE_INTERVAL_SECONDS,
   DEFAULT_INTERVAL_SECONDS,
   DEFAULT_REPEAT_SECONDS,
+  MAX_INTERVAL_SECONDS,
   defaultConfig,
   isDegraded,
   parseConfig,
@@ -212,7 +213,9 @@ describe("parseConfig 的错误处理", () => {
 
   it("拒绝超出范围的采集间隔", () => {
     expect(failure(`${minimal}\n[collect]\ninterval_seconds = 1`)).toContain("interval_seconds");
-    expect(failure(`${minimal}\n[collect]\ninterval_seconds = 99999`)).toContain("interval_seconds");
+    expect(failure(`${minimal}\n[collect]\ninterval_seconds = ${MAX_INTERVAL_SECONDS + 1}`)).toContain(
+      "interval_seconds",
+    );
   });
 
   it("拒绝降频间隔小于常规定时", () => {
@@ -228,8 +231,11 @@ describe("parseConfig 的错误处理", () => {
     expect(failure(`${minimal}\n[notify]\nrepeat_seconds = "600"`)).toContain("repeat_seconds 应当是整数");
   });
 
-  it("拒绝不合可选值的重提醒间隔", () => {
-    expect(failure(`${minimal}\n[notify]\nrepeat_seconds = 601`)).toContain("repeat_seconds 只能取");
+  it("重提醒间隔可以自行填写，超出范围时照实说出", () => {
+    expect(parsed(`${minimal}\n[notify]\nrepeat_seconds = 601`).notify.repeatSeconds).toBe(601);
+    expect(failure(`${minimal}\n[notify]\nrepeat_seconds = ${MAX_INTERVAL_SECONDS + 1}`)).toContain(
+      "repeat_seconds 应当介于",
+    );
   });
 
   it("拒绝把 collect 与 notify 写成非表", () => {

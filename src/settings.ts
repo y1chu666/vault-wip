@@ -5,7 +5,13 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 
 import type { Config, TransportLevel } from "./core/config.js";
-import { isLanguageChoice, parseConfig, serializeConfig } from "./core/config.js";
+import {
+  MAX_INTERVAL_SECONDS,
+  MIN_INTERVAL_SECONDS,
+  isLanguageChoice,
+  parseConfig,
+  serializeConfig,
+} from "./core/config.js";
 import { t } from "./core/i18n.js";
 import { readTextFile, writeTextFile } from "./core/storage.js";
 import type VaultWipPlugin from "./main.js";
@@ -42,11 +48,8 @@ function transportLabel(level: TransportLevel): string {
   }
 }
 
-/** 采集节奏的可选档位（秒）。 */
-const INTERVAL_CHOICES = [5, 15, 30, 60, 300] as const;
-
-/** 提醒重提的档位（秒），0 表示关闭。 */
-const REPEAT_CHOICES = [0, 300, 600, 1800, 3600] as const;
+/** 时长输入的单位（秒），按从大到小排列。 */
+const DURATION_UNITS = [3600, 60, 1] as const;
 
 export class WipSettingTab extends PluginSettingTab {
   private credential = "";
@@ -167,49 +170,38 @@ export class WipSettingTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(this.containerEl)
-      .setName(t("定时采集间隔"))
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOptions(dropdownOptions(INTERVAL_CHOICES, (seconds) => t("{seconds} 秒", { seconds })))
-          .setValue(String(config.collect.intervalSeconds))
-          .onChange((value) => {
-            this.edit((draft) => {
-              draft.collect = { ...draft.collect, intervalSeconds: Number(value) };
-            });
-          }),
-      );
+    addDuration(
+      new Setting(this.containerEl).setName(t("定时采集间隔")),
+      config.collect.intervalSeconds,
+      MIN_INTERVAL_SECONDS,
+      (seconds) => {
+        this.edit((draft) => {
+          draft.collect = { ...draft.collect, intervalSeconds: seconds };
+        });
+      },
+    );
 
-    new Setting(this.containerEl)
-      .setName(t("窗口失焦后多久降频"))
-      .setDesc(t("0 表示不降频。"))
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOptions(
-            dropdownOptions([0, 60, 300, 600], (seconds) =>
-              seconds === 0 ? t("不降频") : t("{seconds} 秒", { seconds }),
-            ),
-          )
-          .setValue(String(config.collect.idleAfterSeconds))
-          .onChange((value) => {
-            this.edit((draft) => {
-              draft.collect = { ...draft.collect, idleAfterSeconds: Number(value) };
-            });
-          }),
-      );
+    addDuration(
+      new Setting(this.containerEl).setName(t("窗口失焦后多久降频")).setDesc(t("0 表示不降频。")),
+      config.collect.idleAfterSeconds,
+      0,
+      (seconds) => {
+        this.edit((draft) => {
+          draft.collect = { ...draft.collect, idleAfterSeconds: seconds };
+        });
+      },
+    );
 
-    new Setting(this.containerEl)
-      .setName(t("失焦后的采集间隔"))
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOptions(dropdownOptions([30, 60, 300, 600], (seconds) => t("{seconds} 秒", { seconds })))
-          .setValue(String(config.collect.idleIntervalSeconds))
-          .onChange((value) => {
-            this.edit((draft) => {
-              draft.collect = { ...draft.collect, idleIntervalSeconds: Number(value) };
-            });
-          }),
-      );
+    addDuration(
+      new Setting(this.containerEl).setName(t("失焦后的采集间隔")),
+      config.collect.idleIntervalSeconds,
+      MIN_INTERVAL_SECONDS,
+      (seconds) => {
+        this.edit((draft) => {
+          draft.collect = { ...draft.collect, idleIntervalSeconds: seconds };
+        });
+      },
+    );
 
     new Setting(this.containerEl)
       .setName(t("识别合并冲突的残留文件"))
@@ -247,41 +239,31 @@ export class WipSettingTab extends PluginSettingTab {
   private renderNotify(config: Config): void {
     new Setting(this.containerEl).setName(t("提醒")).setHeading();
 
-    new Setting(this.containerEl)
-      .setName(t("持续故障的重提醒间隔"))
-      .setDesc(t("仅在中继持续无法连通时使用；0 表示只在故障开始时提醒一次。"))
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOptions(
-            dropdownOptions(REPEAT_CHOICES, (seconds) =>
-              seconds === 0 ? t("关闭重提醒") : t("{minutes} 分钟", { minutes: seconds / 60 }),
-            ),
-          )
-          .setValue(String(config.notify.repeatSeconds))
-          .onChange((value) => {
-            this.edit((draft) => {
-              draft.notify = { ...draft.notify, repeatSeconds: Number(value) };
-            });
-          }),
-      );
+    addDuration(
+      new Setting(this.containerEl)
+        .setName(t("持续故障的重提醒间隔"))
+        .setDesc(t("仅在中继持续无法连通时使用；0 表示只在故障开始时提醒一次。")),
+      config.notify.repeatSeconds,
+      0,
+      (seconds) => {
+        this.edit((draft) => {
+          draft.notify = { ...draft.notify, repeatSeconds: seconds };
+        });
+      },
+    );
 
-    new Setting(this.containerEl)
-      .setName(t("冲突仍在时的重提醒间隔"))
-      .setDesc(t("冲突持续存在时按此间隔再次提醒；0 表示每个冲突只提示一次。"))
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOptions(
-            dropdownOptions(REPEAT_CHOICES, (seconds) =>
-              seconds === 0 ? t("关闭重提醒") : t("{minutes} 分钟", { minutes: seconds / 60 }),
-            ),
-          )
-          .setValue(String(config.notify.conflictRepeatSeconds))
-          .onChange((value) => {
-            this.edit((draft) => {
-              draft.notify = { ...draft.notify, conflictRepeatSeconds: Number(value) };
-            });
-          }),
-      );
+    addDuration(
+      new Setting(this.containerEl)
+        .setName(t("冲突仍在时的重提醒间隔"))
+        .setDesc(t("冲突持续存在时按此间隔再次提醒；0 表示每个冲突只提示一次。")),
+      config.notify.conflictRepeatSeconds,
+      0,
+      (seconds) => {
+        this.edit((draft) => {
+          draft.notify = { ...draft.notify, conflictRepeatSeconds: seconds };
+        });
+      },
+    );
   }
 
   private renderRelays(config: Config): void {
@@ -450,6 +432,108 @@ async function loadAndApply(plugin: VaultWipPlugin): Promise<void> {
   } catch (error) {
     console.error("[vault-wip] 配置不合规", error);
   }
+}
+
+/** 单位的名称。 */
+function durationUnitLabel(unit: number): string {
+  switch (unit) {
+    case 3600:
+      return t("时");
+    case 60:
+      return t("分");
+    default:
+      return t("秒");
+  }
+}
+
+/** 把秒数拆成能整除的最大单位，打开设置页时按它显示。 */
+function splitDuration(seconds: number): { value: number; unit: number } {
+  for (const unit of DURATION_UNITS) {
+    if (unit !== 1 && seconds > 0 && seconds % unit === 0) {
+      return { value: seconds / unit, unit };
+    }
+  }
+  return { value: seconds, unit: 1 };
+}
+
+/** 取值不合规时给出的范围说明。 */
+function durationRangeHint(minimum: number): string {
+  return t("请填 {minimum} 秒到 {maximum} 天之间的整数。", {
+    minimum,
+    maximum: MAX_INTERVAL_SECONDS / (24 * 60 * 60),
+  });
+}
+
+/**
+ * 数字加单位的时长输入。
+ *
+ * 取值不合规时只在原处提示，不写回配置；写得合规时立刻写回，与其它设置项一致。
+ */
+function addDuration(
+  setting: Setting,
+  seconds: number,
+  minimum: number,
+  apply: (seconds: number) => void,
+): void {
+  const baseDescription = setting.descEl.textContent ?? "";
+  const initial = splitDuration(seconds);
+  let value = initial.value;
+  let unit = initial.unit;
+
+  const showRange = (): void => {
+    setting.setDesc(durationRangeHint(minimum));
+  };
+  const restore = (): void => {
+    setting.setDesc(baseDescription);
+  };
+  /** 按当前的数字与单位写回；不合规时提示并保持原值。 */
+  const commit = (): boolean => {
+    const total = value * unit;
+    if (total < minimum || total > MAX_INTERVAL_SECONDS) {
+      showRange();
+      return false;
+    }
+    restore();
+    apply(total);
+    return true;
+  };
+
+  setting.addText((text) => {
+    text.inputEl.type = "number";
+    text.inputEl.min = "0";
+    text.setValue(String(value));
+    text.onChange((raw) => {
+      if (raw.trim() === "") {
+        showRange();
+        return;
+      }
+      const parsed = Number(raw);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        showRange();
+        return;
+      }
+      value = parsed;
+      commit();
+    });
+  });
+
+  setting.addDropdown((dropdown) => {
+    dropdown
+      .addOptions(dropdownOptions(DURATION_UNITS, durationUnitLabel))
+      .setValue(String(unit))
+      .onChange((raw) => {
+        const previous = unit;
+        const next = Number(raw);
+        if (!Number.isInteger(next) || next <= 0) {
+          return;
+        }
+        unit = next;
+        if (!commit()) {
+          unit = previous;
+          dropdown.setValue(String(previous));
+        }
+      });
+  });
 }
 
 /** 把档位列表变成下拉选项。 */

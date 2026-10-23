@@ -21,9 +21,6 @@ export const LANGUAGE_CHOICES = ["auto", "zh", "en"] as const;
 /** 界面语言的写法。 */
 export type LanguageChoice = (typeof LANGUAGE_CHOICES)[number];
 
-/** 重提醒的可选间隔（秒），0 表示关闭。 */
-export const REPEAT_SECONDS_CHOICES = [0, 300, 600, 1800, 3600] as const;
-
 /** 默认的定时采集间隔（秒）。 */
 export const DEFAULT_INTERVAL_SECONDS = 15;
 
@@ -43,8 +40,10 @@ const MAX_ALIAS_LENGTH = 64;
 const MAX_DEVICE_NAME_LENGTH = 64;
 const MAX_RELAY_NAME_LENGTH = 32;
 const MAX_REMOTE_NAME_LENGTH = 64;
-const MIN_INTERVAL_SECONDS = 5;
-const MAX_INTERVAL_SECONDS = 3600;
+/** 定时采集间隔的下限（秒）。 */
+export const MIN_INTERVAL_SECONDS = 5;
+/** 各项间隔的上限（秒）。取三十天，既容得下按时计的间隔，也能挡住多打几个零。 */
+export const MAX_INTERVAL_SECONDS = 30 * 24 * 60 * 60;
 
 /** 中继配置。 */
 export interface RelaySettings {
@@ -289,7 +288,7 @@ idle_interval_seconds = ${DEFAULT_IDLE_INTERVAL_SECONDS}
 detect_conflict_files = true
 
 [notify]
-# ${t("持续故障的重提醒间隔（秒），可取值 {choices}，0 表示关闭。", { choices: REPEAT_SECONDS_CHOICES.join(separator) })}
+# ${t("持续故障的重提醒间隔（秒），0 表示关闭。")}
 repeat_seconds = ${DEFAULT_REPEAT_SECONDS}
 # ${t("冲突仍在时的重提醒间隔（秒）；0 表示每个冲突只提示一次。")}
 conflict_repeat_seconds = ${DEFAULT_CONFLICT_REPEAT_SECONDS}
@@ -429,20 +428,22 @@ function parseNotify(value: unknown, problems: string[]): NotifySettings {
   }
 
   checkKeys(value, ["repeat_seconds", "conflict_repeat_seconds"], "notify", problems);
-  const repeatSeconds = readInteger(value, "repeat_seconds", "notify", problems) ?? fallback.repeatSeconds;
-  const conflictRepeatSeconds =
-    readInteger(value, "conflict_repeat_seconds", "notify", problems) ?? fallback.conflictRepeatSeconds;
-  if (!isRepeatChoice(repeatSeconds)) {
-    problems.push(
-      t("notify.repeat_seconds 只能取 {choices}（秒）", { choices: REPEAT_SECONDS_CHOICES.join(t("、")) }),
-    );
-  }
-  if (!isRepeatChoice(conflictRepeatSeconds)) {
-    problems.push(
-      t("notify.conflict_repeat_seconds 只能取 {choices}", { choices: REPEAT_SECONDS_CHOICES.join(t("、")) }),
-    );
-    return fallback;
-  }
+  const repeatSeconds = readInterval(
+    value,
+    "repeat_seconds",
+    "notify",
+    fallback.repeatSeconds,
+    problems,
+    0,
+  );
+  const conflictRepeatSeconds = readInterval(
+    value,
+    "conflict_repeat_seconds",
+    "notify",
+    fallback.conflictRepeatSeconds,
+    problems,
+    0,
+  );
   return { repeatSeconds, conflictRepeatSeconds };
 }
 
@@ -615,10 +616,6 @@ function readInterval(
     return fallback;
   }
   return value;
-}
-
-function isRepeatChoice(value: number): boolean {
-  return (REPEAT_SECONDS_CHOICES as readonly number[]).includes(value);
 }
 
 function readString(

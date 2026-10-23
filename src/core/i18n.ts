@@ -256,10 +256,12 @@ export const ENGLISH = {
   "采集": "Collection",
   "git 可执行文件": "git executable",
   "留空表示从 PATH 中查找。": "Leave empty to look it up in PATH.",
+  "时": "hours",
+  "分": "minutes",
+  "秒": "seconds",
   "定时采集间隔": "Interval between scheduled collections",
   "窗口失焦后多久降频": "Delay before slowing down when the window loses focus",
   "0 表示不降频。": "0 means no slowdown.",
-  "不降频": "no slowdown",
   "失焦后的采集间隔": "Interval while unfocused",
   "识别合并冲突的残留文件": "Recognise leftover files from a merge conflict",
   "开启时会把留有合并痕迹的文件单独标出，只影响措辞，不影响是否算冲突。":
@@ -271,10 +273,10 @@ export const ENGLISH = {
     "Repeat the notice at this interval while a conflict remains; 0 notifies each conflict only once.",
   "冲突仍在时的重提醒间隔（秒）；0 表示每个冲突只提示一次。":
     "Repeat interval while a conflict persists (seconds); 0 notifies each conflict only once.",
-  "notify.conflict_repeat_seconds 只能取 {choices}": "notify.conflict_repeat_seconds must be one of {choices}",
+  "持续故障的重提醒间隔（秒），0 表示关闭。":
+    "Interval between repeated notices of an ongoing failure (seconds); 0 disables it.",
   "仅在中继持续无法连通时使用；0 表示只在故障开始时提醒一次。":
     "Used only while a relay stays unreachable; 0 means to notify once when the failure starts.",
-  "关闭重提醒": "no repeat notice",
   "可填写多台；各中继之间互不相通，记录由本机转发。传输级别与地址协议必须相符。":
     "Several relays may be listed. Relays do not talk to each other, and this device carries records between them. The transport level must match the address scheme.",
   "第 {index} 台": "Relay {index}",
@@ -609,6 +611,8 @@ export const ENGLISH = {
   "上次查询": "Last query",
   "查询远端": "Query the remote",
   "查询用的远端": "Remote to query",
+  "请填 {minimum} 秒到 {maximum} 天之间的整数。":
+    "Enter a whole number from {minimum} seconds to {maximum} days.",
   "填写要查询的远端名，例如 origin；留空表示用当前分支的上游。查询只向远端问一下两边各有哪些提交，既不拉取也不改动本机引用，结果只在本机界面上显示。":
     "Fill in the remote name to query, for example origin; leave empty to use the upstream of the current branch. The query only asks the remote which commits each side has; it neither fetches nor changes any local reference, and the result is shown on this machine alone.",
   "例如：origin": "for example: origin",
