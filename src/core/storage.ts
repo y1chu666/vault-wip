@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { generateContentKey, encodeContentKey, decodeContentKey } from "./crypto.js";
 import type { ContentKey } from "./crypto.js";
 import { DeviceKey } from "./identity.js";
-import type { DeviceStatus } from "./state.js";
+import type { DeviceStatus, RevokedDevice } from "./state.js";
 import { decodeText, encodeText } from "./text.js";
 import { CHANGE_CODES } from "./payload.js";
 import { t } from "./i18n.js";
@@ -219,8 +219,10 @@ export interface PersistedState {
   /** 本设备已上报到的序号。 */
   readonly sequence: number;
   readonly peers: readonly DeviceStatus[];
-  /** 已读到的吊销名单，长期保留。 */
-  readonly revoked: readonly string[];
+  /** 已读到的吊销名单，长期保留；名称与时间只用于界面辨认。 */
+  readonly revoked: readonly RevokedDevice[];
+  /** 使用者从本机名单里移出的设备；中继上的吊销记录仍在，这里只记本机的取舍。 */
+  readonly reAdmitted?: readonly string[];
   /** 本设备是否已在这一轮中退役；退役后需重新注册才能继续使用。 */
   readonly retired: boolean;
 }
@@ -268,12 +270,18 @@ export async function loadState(path: string): Promise<PersistedState | null> {
     parsedPeers.push(parsed);
   }
 
-  const revokedFingerprints: string[] = [];
+  const revokedEntries: RevokedDevice[] = [];
   for (const entry of revoked as unknown[]) {
-    if (typeof entry !== "string") {
+    const parsed = parseRevokedDevice(entry);
+    if (parsed === null) {
       return null;
     }
-    revokedFingerprints.push(entry);
+    revokedEntries.push(parsed);
+  }
+
+  const reAdmitted = parseReAdmitted(raw["reAdmitted"]);
+  if (reAdmitted === null) {
+    return null;
   }
 
   return {
@@ -281,9 +289,55 @@ export async function loadState(path: string): Promise<PersistedState | null> {
     channels,
     sequence,
     peers: parsedPeers,
-    revoked: revokedFingerprints,
+    revoked: revokedEntries,
+    reAdmitted,
     retired,
   };
+}
+
+/** 吊销条目：新写法带名称与时间，旧缓存里只是一个指纹。 */
+function parseRevokedDevice(raw: unknown): RevokedDevice | null {
+  if (typeof raw === "string") {
+    return raw === "" ? null : { fingerprint: raw, name: "", revokedAt: null };
+  }
+  if (!isTable(raw)) {
+    return null;
+  }
+  const fingerprint = raw["fingerprint"];
+  const name = raw["name"];
+  const revokedAt = raw["revokedAt"];
+  if (typeof fingerprint !== "string" || fingerprint === "") {
+    return null;
+  }
+  if (name !== undefined && typeof name !== "string") {
+    return null;
+  }
+  if (revokedAt !== undefined && revokedAt !== null && typeof revokedAt !== "string") {
+    return null;
+  }
+  return {
+    fingerprint,
+    name: typeof name === "string" ? name : "",
+    revokedAt: typeof revokedAt === "string" ? revokedAt : null,
+  };
+}
+
+/** 本机移出名单的设备指纹；缺这一项视为空，便于读了旧缓存之后继续用。 */
+function parseReAdmitted(raw: unknown): string[] | null {
+  if (raw === undefined) {
+    return [];
+  }
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+  const list: string[] = [];
+  for (const entry of raw as unknown[]) {
+    if (typeof entry !== "string") {
+      return null;
+    }
+    list.push(entry);
+  }
+  return list;
 }
 
 /** 写下状态缓存。 */

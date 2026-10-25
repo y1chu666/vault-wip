@@ -283,7 +283,8 @@ describe("状态缓存", () => {
         },
       },
     ],
-    revoked: ["bb"],
+    revoked: [{ fingerprint: "bb", name: "示例设备丙", revokedAt: "2023-11-14T22:15:23Z" }],
+    reAdmitted: [],
   };
 
   it("文件不存在时给出空", async () => {
@@ -298,6 +299,17 @@ describe("状态缓存", () => {
     await saveState(files.state, state);
 
     expect(await loadState(files.state)).toEqual(state);
+  });
+
+  it("旧缓存里的吊销名单只有一个指纹时也能读出", async () => {
+    const files = await temporaryFiles();
+    const legacy = { ...state, revoked: ["cc"], reAdmitted: undefined };
+
+    await writeTextFile(files.state, JSON.stringify(legacy));
+
+    const loaded = await loadState(files.state);
+    expect(loaded?.revoked).toEqual([{ fingerprint: "cc", name: "", revokedAt: null }]);
+    expect(loaded?.reAdmitted).toEqual([]);
   });
 
   it("缓存损坏时按首次运行处理", async () => {
@@ -338,6 +350,14 @@ describe("状态缓存", () => {
 
     const badRevoked = { ...state, revoked: [1] };
     await writeTextFile(files.state, JSON.stringify(badRevoked));
+    expect(await loadState(files.state)).toBeNull();
+
+    const badRevokedField = { ...state, revoked: [{ fingerprint: "bb", revokedAt: 1 }] };
+    await writeTextFile(files.state, JSON.stringify(badRevokedField));
+    expect(await loadState(files.state)).toBeNull();
+
+    const badReAdmitted = { ...state, reAdmitted: [1] };
+    await writeTextFile(files.state, JSON.stringify(badReAdmitted));
     expect(await loadState(files.state)).toBeNull();
   });
 

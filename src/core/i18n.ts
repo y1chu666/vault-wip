@@ -36,6 +36,7 @@ export const ENGLISH = {
   // 碎片：列表与句子的连接符。
   "、": ", ",
   "；": "; ",
+  " · ": " · ",
   "「{name}」": '"{name}"',
   "{name}：{text}": "{name}: {text}",
 
@@ -46,6 +47,8 @@ export const ENGLISH = {
   "配置里没有这台中继": "this relay is missing from the configuration",
   "注册完成": "registration complete",
   "已吊销设备 {fingerprint}": "revoked device {fingerprint}",
+  "已从本机吊销名单移除设备 {fingerprint}":
+    "removed device {fingerprint} from this machine's revoke list",
   "本设备已退役，需要重新注册才能继续使用": "this device has been retired; register again before using it",
   "已换用新的内容密钥": "switched to the new content key",
   "本机计数已重置": "the local counter has been reset",
@@ -95,8 +98,6 @@ export const ENGLISH = {
   "已上报序号": "Reported sequence",
   "序号": "Sequence",
   "仓库别名": "Vault alias",
-  "改动文件": "Changed files",
-  "清单是否截断": "List truncated",
   "是": "Yes",
   "否": "No",
   "采集时间": "Collected at",
@@ -119,11 +120,17 @@ export const ENGLISH = {
   "最近一次失败：{reason}": "Last failure: {reason}",
   "内容密钥标识": "Content key id",
   "本设备是否已退役": "Device retired",
+  "身份与状态": "Identity and status",
+  "危险操作": "Dangerous actions",
 
   // 状态视图：概览。
   "本设备": "This device",
   "本机改动": "Local changes",
   "各端改动": "Other devices",
+  "对端": "Peers",
+  "{count} 个文件": "{count} files",
+  "{count} 个文件 · {time}": "{count} files · {time}",
+  "清单过长，采集时已截断。": "The list is too long and was truncated during collection.",
   "点击查看明细": "Click for details",
   "尚无可用的对端记录。": "No peer records yet.",
   "对端设备": "Peers",
@@ -138,14 +145,16 @@ export const ENGLISH = {
   "本设备已退役：需要重新注册才能继续使用。":
     "This device has been retired. Register again before using it.",
   "尚未取得本机状态。": "Local status is not available yet.",
-  "未发现两端改动同一文件。": "No file has been changed on both sides.",
   "立即采集并上报": "Collect and report now",
 
   // 状态视图：各端状态。
   "尚无可用的对端设备记录。": "No updates from other devices yet.",
   "已被吊销": "Revoked",
-  "下列设备的记录此后不再参与判断；吊销名单长期保留，不会自行消失。":
-    "These devices no longer take part in the check. The revoke list is kept permanently and does not expire.",
+  "下列设备不再参与判断。删除只从本机名单移除，该设备的记录会重新参与判断。":
+    "These devices no longer take part in the check. Deleting only removes the entry on this machine; their records take part again.",
+  "时间未知": "time unknown",
+  "删除": "Delete",
+  "确认移出本机名单": "Confirm removal from this machine",
   "吊销这台设备": "Revoke this device",
   "没有改动文件。": "No changed files.",
   "新增 {count} 个": "{count} added",

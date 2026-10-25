@@ -4,7 +4,7 @@
 // 再写一遍。界面本身不进覆盖率统计，因此它保持直白：取一份现状，逐块填上文字。
 import { ItemView, Notice, setIcon, type WorkspaceLeaf } from "obsidian";
 
-import { displayName, type Conflict, type DeviceStatus } from "./core/state.js";
+import { displayName, type Conflict, type DeviceStatus, type RevokedDevice } from "./core/state.js";
 import type { EngineSnapshot, RelayStatus } from "./core/engine.js";
 import { PLUGIN_NAME, t } from "./core/i18n.js";
 import { refName, remoteSummary } from "./core/remote.js";
@@ -197,81 +197,106 @@ export class WipView extends ItemView {
     if (snapshot.relays.length === 0) {
       hintWithLink(pane);
     } else if (registered === 0) {
-      const warn = pane.createDiv({ cls: "vault-wip-warning" });
-      warn.setText(t("尚未连接任何中继：请在设置中填写地址并完成注册。"));
+      notice(pane, t("尚未连接任何中继：请在设置中填写地址并完成注册。"));
     }
-
-    const selfCard = section(pane, t("本设备"));
-    selfCard.classList.add("vault-wip-self");
-    table(selfCard, [
-      [t("名称"), snapshot.selfLabel === "" ? t("（未命名）") : snapshot.selfLabel],
-      [t("指纹"), snapshot.selfFingerprint],
-      [t("已上报序号"), String(snapshot.sequence)],
-      [t("仓库别名"), snapshot.alias],
-    ]);
     if (snapshot.retired) {
-      pane.createDiv({ text: t("本设备已退役：需要重新注册才能继续使用。") });
+      notice(pane, t("本设备已退役：需要重新注册才能继续使用。"), true);
     }
 
     if (snapshot.local === null) {
       heading(pane, t("本机改动"));
       hint(pane, t("尚未取得本机状态。"));
+      const actions = pane.createDiv({ cls: "vault-wip-actions" });
+      const button = actions.createEl("button", { text: t("立即采集并上报") });
+      button.onclick = () => {
+        void this.plugin.reportNow();
+      };
     } else {
       const local = snapshot.local;
       const card = pane.createDiv({ cls: "vault-wip-card" });
       const head = card.createDiv({ cls: "vault-wip-card-head" });
       head.createDiv({ cls: "vault-wip-card-title", text: t("本机改动") });
-      head.createDiv({ cls: "vault-wip-card-meta", text: snapshot.diagnostics.collectedAt === null ? "" : relativeTime(snapshot.diagnostics.collectedAt) });
-      table(card, [
-        [t("改动文件"), String(local.count)],
-        [t("清单是否截断"), local.truncated ? t("是") : t("否")],
-      ]);
+      const collectedAt = snapshot.diagnostics.collectedAt;
+      head.createDiv({
+        cls: "vault-wip-card-meta",
+        text:
+          collectedAt === null
+            ? t("{count} 个文件", { count: local.count })
+            : t("{count} 个文件 · {time}", { count: local.count, time: relativeTime(collectedAt) }),
+      });
+      if (local.truncated) {
+        hint(card, t("清单过长，采集时已截断。"));
+      }
       kindChips(card, local);
       groupedFiles(card, local.paths, local.kinds, "local");
       suspectNotes(card, local);
+      const actions = card.createDiv({ cls: "vault-wip-actions" });
+      const button = actions.createEl("button", { text: t("立即采集并上报") });
+      button.onclick = () => {
+        void this.plugin.reportNow();
+      };
+    }
+
+    // 冲突是这一页里最需要立刻知道的事，有才出现，并且独占一个警示块。
+    if (snapshot.conflicts.length > 0) {
+      const block = notice(pane, t("与对端的冲突"));
+      for (const conflict of snapshot.conflicts) {
+        conflictLine(block, conflict);
+      }
     }
 
     heading(pane, t("各端改动"));
-    if (snapshot.peers.length === 0) {
-      pane.createDiv({ text: t("尚无可用的对端记录。") });
+    const active = snapshot.peers.filter(
+      (peer) => !snapshot.revoked.some((entry) => entry.fingerprint === peer.fingerprint),
+    );
+    if (active.length === 0) {
+      hint(pane, t("尚无可用的对端记录。"));
     } else {
-      for (const peer of snapshot.peers) {
+      for (const peer of active) {
         overviewPeer(pane, peer);
       }
     }
 
-    heading(pane, t("与对端的冲突"));
-    if (snapshot.conflicts.length === 0) {
-      hint(pane, t("未发现两端改动同一文件。"));
-    } else {
-      for (const conflict of snapshot.conflicts) {
-        conflictLine(pane, conflict);
-      }
-    }
-
     heading(pane, t("远端查询"));
-    const remoteBlock = pane.createDiv({ cls: "vault-wip-remote" });
+    const remoteCard = pane.createDiv({ cls: "vault-wip-card" });
     const remote = snapshot.remote;
-    table(remoteBlock, [
+    table(remoteCard, [
       [t("远端"), remote !== null && "remote" in remote ? refName(remote) : t("无")],
       [t("上次查询"), clockText(snapshot.remoteQueriedAt)],
     ]);
-    remoteBlock.createDiv({ text: remoteSummary(remote) });
-
-    const actions = pane.createDiv({ cls: "vault-wip-actions vault-wip-actions-even" });
-    const button = actions.createEl("button", { text: t("立即采集并上报") });
-    button.onclick = () => {
-      void this.plugin.reportNow();
-    };
-    const queryButton = actions.createEl("button", { text: t("查询远端") });
+    hint(remoteCard, remoteSummary(remote));
+    const remoteActions = remoteCard.createDiv({ cls: "vault-wip-actions" });
+    const queryButton = remoteActions.createEl("button", { text: t("查询远端") });
     queryButton.onclick = () => {
       void this.plugin.queryRemoteNow();
     };
   }
 
   private fillPeers(pane: HTMLElement, snapshot: EngineSnapshot): void {
-    heading(pane, t("各端状态"));
-    const active = snapshot.peers.filter((peer) => !snapshot.revoked.includes(peer.fingerprint));
+    heading(pane, t("本设备"));
+    const self = pane.createDiv({ cls: "vault-wip-card" });
+    const selfHead = self.createDiv({ cls: "vault-wip-peer-head" });
+    const collectedAt = snapshot.diagnostics.collectedAt;
+    selfHead.createDiv({ cls: `vault-wip-dot ${collectedAt === null ? "is-old" : freshnessClass(collectedAt)}` });
+    const selfTitle = selfHead.createDiv({ cls: "vault-wip-peer-title" });
+    selfTitle.createDiv({
+      cls: "vault-wip-peer-name",
+      text: snapshot.selfLabel === "" ? t("（未命名）") : snapshot.selfLabel,
+    });
+    if (collectedAt !== null) {
+      selfTitle.createDiv({ cls: "vault-wip-peer-meta", text: relativeTime(collectedAt) });
+    }
+    table(self, [
+      [t("指纹"), snapshot.selfFingerprint],
+      [t("仓库别名"), snapshot.alias],
+    ]);
+    if (snapshot.retired) {
+      notice(pane, t("本设备已退役：需要重新注册才能继续使用。"), true);
+    }
+
+    heading(pane, t("对端"));
+    const revoked = new Set(snapshot.revoked.map((entry) => entry.fingerprint));
+    const active = snapshot.peers.filter((peer) => !revoked.has(peer.fingerprint));
     if (active.length === 0) {
       hint(pane, t("尚无可用的对端设备记录。"));
     }
@@ -283,9 +308,37 @@ export class WipView extends ItemView {
 
     if (snapshot.revoked.length > 0) {
       heading(pane, t("已被吊销"));
-      hint(pane, t("下列设备的记录此后不再参与判断；吊销名单长期保留，不会自行消失。"));
-      for (const fingerprint of snapshot.revoked) {
-        pane.createDiv({ text: fingerprint });
+      const list = pane.createDiv({ cls: "vault-wip-card" });
+      hint(list, t("下列设备不再参与判断。删除只从本机名单移除，该设备的记录会重新参与判断。"), true);
+      for (const entry of snapshot.revoked) {
+        const row = list.createDiv({ cls: "vault-wip-revoked-row" });
+        const main = row.createDiv({ cls: "vault-wip-revoked-main" });
+        const head = main.createDiv({ cls: "vault-wip-revoked-head" });
+        head.createDiv({
+          cls: "vault-wip-revoked-name",
+          text: entry.name === "" ? t("设备 {fingerprint}", { fingerprint: entry.fingerprint.slice(0, 8) }) : entry.name,
+        });
+        const remove = head.createEl("button", { cls: "mod-warning", text: t("删除") });
+        remove.style.color = "var(--text-error)";
+        let confirming = false;
+        remove.onclick = () => {
+          if (!confirming) {
+            confirming = true;
+            remove.setText(t("确认移出本机名单"));
+            return;
+          }
+          confirming = false;
+          remove.setText(t("删除"));
+          void this.plugin.unrevoke(entry.fingerprint);
+        };
+        const meta = main.createDiv({ cls: "vault-wip-revoked-meta" });
+        meta.createSpan({
+          cls: "vault-wip-revoked-fingerprint",
+          text: entry.fingerprint,
+          attr: { title: entry.fingerprint },
+        });
+        const when = revokedTimeText(entry);
+        meta.createSpan({ cls: "vault-wip-revoked-time", text: when.text, attr: { title: when.title } });
       }
     }
   }
@@ -297,11 +350,10 @@ export class WipView extends ItemView {
       return;
     }
     if (snapshot.relays.every((relay) => relay.channelId === "")) {
-      pane.createDiv({ cls: "vault-wip-warning", text: t("以下中继尚未完成注册。") });
+      notice(pane, t("以下中继尚未完成注册。"));
     }
     if (snapshot.degraded) {
-      const warn = pane.createDiv({ cls: "vault-wip-warning" });
-      warn.setText(t("有中继处于降级传输：通信不加密或可被冒充，此时不允许注册、吊销与退役。"));
+      notice(pane, t("有中继处于降级传输：通信不加密或可被冒充，此时不允许注册、吊销与退役。"), true);
     }
 
     for (const relay of snapshot.relays) {
@@ -311,21 +363,23 @@ export class WipView extends ItemView {
 
   private fillDiagnostics(pane: HTMLElement, snapshot: EngineSnapshot): void {
     heading(pane, t("最近一次采集"));
-    table(pane, [
+    const collectedCard = pane.createDiv({ cls: "vault-wip-card" });
+    table(collectedCard, [
       [t("采集时间"), clockText(snapshot.diagnostics.collectedAt)],
       [t("耗时"), collectMillisText(snapshot.diagnostics.collectMillis)],
       [t("git 版本"), snapshot.diagnostics.gitVersion ?? t("未知")],
     ]);
 
     heading(pane, t("本机计数"));
-    table(pane, [[t("已上报序号"), String(snapshot.sequence)]]);
+    const countCard = pane.createDiv({ cls: "vault-wip-card" });
+    table(countCard, [[t("已上报序号"), String(snapshot.sequence)]]);
     hint(
-      pane,
+      countCard,
       t(
         "序号由本设备自己推进，平时不必过问。只有在它已经无法继续推进时（例如上一条记录越过了可表示范围），才需要在这里重置；重置只改本机计数，不会改动中继上的任何数据。",
       ),
     );
-    const countRow = pane.createDiv({ cls: "vault-wip-actions" });
+    const countRow = countCard.createDiv({ cls: "vault-wip-actions" });
     const resetButton = countRow.createEl("button", { cls: "mod-warning", text: t("重置本机计数") });
     resetButton.onclick = () => {
       if (!this.confirmResetSequence) {
@@ -462,6 +516,9 @@ export class WipView extends ItemView {
       });
     };
 
+    this.securityDynamic = pane.createDiv({ cls: "vault-wip-security-status" });
+
+    heading(pane, t("危险操作"));
     const retireCard = section(pane, t("本设备"));
     const retireRow = retireCard.createDiv({ cls: "vault-wip-actions" });
     const retireButton = retireRow.createEl("button", { cls: "mod-warning", text: t("退役本设备") });
@@ -482,7 +539,6 @@ export class WipView extends ItemView {
       true,
     );
 
-    this.securityDynamic = pane.createDiv({ cls: "vault-wip-security-status" });
     this.securityBuilt = true;
   }
 
@@ -496,6 +552,8 @@ export class WipView extends ItemView {
     if (snapshot === null) {
       return;
     }
+
+    heading(container, t("身份与状态"));
 
     const infoCard = container.createDiv({ cls: "vault-wip-card" });
     table(infoCard, [
@@ -516,8 +574,8 @@ export class WipView extends ItemView {
       ]);
     }
 
-    if (snapshot.revoked.includes(snapshot.selfFingerprint)) {
-      container.createDiv({ text: t("本设备指纹已在吊销名单中；须由中继侧恢复后方可继续使用。") });
+    if (snapshot.revoked.some((entry) => entry.fingerprint === snapshot.selfFingerprint)) {
+      notice(container, t("本设备指纹已在吊销名单中；须由中继侧恢复后方可继续使用。"), true);
     }
   }
 
@@ -533,8 +591,11 @@ export class WipView extends ItemView {
 function overviewStats(parent: HTMLElement, snapshot: EngineSnapshot): void {
   const grid = parent.createDiv({ cls: "vault-wip-stats" });
   stat(grid, String(snapshot.local?.count ?? 0), t("本机改动"));
-  const online = snapshot.peers.filter((peer) => isOnline(peer.collectedAt)).length;
-  stat(grid, `${String(online)}/${String(snapshot.peers.length)}`, t("在线对端"));
+  const active = snapshot.peers.filter(
+    (peer) => !snapshot.revoked.some((entry) => entry.fingerprint === peer.fingerprint),
+  );
+  const online = active.filter((peer) => isOnline(peer.collectedAt)).length;
+  stat(grid, `${String(online)}/${String(active.length)}`, t("在线对端"));
   stat(grid, String(snapshot.conflicts.length), t("冲突"));
   stat(grid, String(snapshot.relays.filter((relay) => relay.lastFailure === null).length), t("可用中继"));
 }
@@ -571,6 +632,40 @@ function heading(parent: HTMLElement, text: string): HTMLElement {
 /** 说明性文字：小字灰色，与正文分开；紧跟在标题后时不再留上边距。 */
 function hint(parent: HTMLElement, text: string, flush = false): HTMLElement {
   return parent.createDiv({ cls: flush ? "vault-wip-hint is-flush" : "vault-wip-hint", text });
+}
+
+/** 一条带标题的警示块：冲突、退役与连接问题都用它，形状固定。 */
+function notice(parent: HTMLElement, title: string, isError = false): HTMLElement {
+  const block = parent.createDiv({ cls: isError ? "vault-wip-notice is-error" : "vault-wip-notice" });
+  block.createDiv({ cls: "vault-wip-notice-title", text: title });
+  return block;
+}
+
+/**
+ * 吊销时间的写法：当年省去年份，跨年只留日期。
+ *
+ * 相对时间只在三十天内附上：再久「多少天前」就没有信息量，反而挤掉日期。
+ * 完整时刻放在悬停里，行内不必写全。
+ */
+function revokedTimeText(entry: RevokedDevice): { text: string; title: string } {
+  if (entry.revokedAt === null) {
+    return { text: t("时间未知"), title: "" };
+  }
+  const moment = new Date(entry.revokedAt);
+  if (Number.isNaN(moment.getTime())) {
+    return { text: entry.revokedAt, title: entry.revokedAt };
+  }
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  const sameYear = moment.getFullYear() === new Date().getFullYear();
+  const date = sameYear
+    ? `${pad(moment.getMonth() + 1)}-${pad(moment.getDate())} ${pad(moment.getHours())}:${pad(moment.getMinutes())}`
+    : `${String(moment.getFullYear())}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}`;
+  const age = Date.now() - moment.getTime();
+  const withinMonth = age >= 0 && age <= 30 * 24 * 60 * 60 * 1000;
+  return {
+    text: withinMonth ? `${date}${t(" · ")}${relativeTime(entry.revokedAt)}` : date,
+    title: moment.toLocaleString(),
+  };
 }
 
 /** 一张两列的小表。 */
@@ -715,7 +810,7 @@ function conflictLine(parent: HTMLElement, conflict: Conflict): void {
   const names = conflict.peers.map((peer) => peer.name).join(t("、"));
   const caution =
     conflict.localSuspect || conflict.peerSuspect ? t("（其中一边的差异仅在行尾或权限位）") : "";
-  parent.createDiv({ text: t("{path}：与 {names} 的改动重叠{caution}", { path: conflict.path, names, caution }) });
+  hint(parent, t("{path}：与 {names} 的改动重叠{caution}", { path: conflict.path, names, caution }));
 }
 
 /** 概览里的一台对端：只看规模与时间，明细展开才出现。 */
@@ -727,11 +822,11 @@ function overviewPeer(parent: HTMLElement, peer: DeviceStatus): void {
   title.createDiv({ cls: "vault-wip-peer-name", text: displayName(peer) });
   title.createDiv({
     cls: "vault-wip-peer-meta",
-    text: `${String(peer.payload.count)} · ${relativeTime(peer.collectedAt)}`,
+    text: t("{count} 个文件 · {time}", { count: peer.payload.count, time: relativeTime(peer.collectedAt) }),
   });
-  table(block, [
-    [t("清单是否截断"), peer.payload.truncated ? t("是") : t("否")],
-  ]);
+  if (peer.payload.truncated) {
+    hint(block, t("清单过长，采集时已截断。"));
+  }
   kindChips(block, peer.payload);
   groupedFiles(block, peer.payload.paths, peer.payload.kinds, `peer:${peer.fingerprint}`);
   suspectNotes(block, peer.payload);

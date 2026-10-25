@@ -18,6 +18,15 @@ export interface DeviceStatus {
   readonly payload: StatusPayload;
 }
 
+/** 一条已知的吊销记录。名称与时间只为界面辨认，旧缓存里可能没有。 */
+export interface RevokedDevice {
+  readonly fingerprint: string;
+  /** 吊销时已知的设备名称；从未见过这台设备时为空。 */
+  readonly name: string;
+  /** 吊销时刻，RFC 3339；旧缓存里没有则为 null。 */
+  readonly revokedAt: string | null;
+}
+
 /** 序号推进中的异常。 */
 export interface SequenceAnomaly {
   readonly fingerprint: string;

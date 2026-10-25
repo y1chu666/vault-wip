@@ -41,6 +41,7 @@ import {
   nextSequence,
   type Conflict,
   type DeviceStatus,
+  type RevokedDevice,
   type SequenceAnomaly,
 } from "./state.js";
 import {
@@ -77,7 +78,9 @@ interface EngineState {
   channels: Record<string, ChannelRegistration>;
   sequence: number;
   peers: DeviceStatus[];
-  revoked: string[];
+  revoked: RevokedDevice[];
+  /** 使用者从本机名单里移出的设备；中继再发来吊销也不重新记入。 */
+  reAdmitted: string[];
   retired: boolean;
 }
 
@@ -127,7 +130,7 @@ export interface EngineSnapshot {
   readonly local: StatusPayload | null;
   readonly conflicts: readonly Conflict[];
   readonly peers: readonly DeviceStatus[];
-  readonly revoked: readonly string[];
+  readonly revoked: readonly RevokedDevice[];
   readonly relays: readonly RelayStatus[];
   readonly contentKeyId: string;
   readonly retired: boolean;
@@ -226,6 +229,7 @@ export class Engine {
         sequence: stored?.sequence ?? 0,
         peers: [...(stored?.peers ?? [])],
         revoked: [...(stored?.revoked ?? [])],
+        reAdmitted: [...(stored?.reAdmitted ?? [])],
         retired: stored?.retired ?? false,
       },
     });
@@ -382,8 +386,13 @@ export class Engine {
       }
     }
 
-    if (!this.state.revoked.includes(fingerprint)) {
-      this.state.revoked = [...this.state.revoked, fingerprint];
+    this.state.reAdmitted = this.state.reAdmitted.filter((item) => item !== fingerprint);
+    if (!this.state.revoked.some((entry) => entry.fingerprint === fingerprint)) {
+      const peer = this.state.peers.find((candidate) => candidate.fingerprint === fingerprint);
+      this.state.revoked = [
+        ...this.state.revoked,
+        { fingerprint, name: peer?.label ?? "", revokedAt: formatRfc3339(this.now()) },
+      ];
     }
     await this.persist();
     this.refreshConflicts();
@@ -391,6 +400,25 @@ export class Engine {
     if (failures.length > 0) {
       throw new StorageError(t("吊销未全部完成：{failures}", { failures: failures.join(t("；")) }));
     }
+  }
+
+  /**
+   * 从本机吊销名单里移出一台设备。
+   *
+   * 中继上的吊销记录不会因此撤销；这里只改本机的取舍：移出之后这台设备的记录重新参与
+   * 判断，中继再发来同一台设备的吊销也不记回。改主意时重新吊销即可。
+   */
+  async unrevoke(fingerprint: string): Promise<void> {
+    const remaining = this.state.revoked.filter((entry) => entry.fingerprint !== fingerprint);
+    if (remaining.length === this.state.revoked.length) {
+      return;
+    }
+    this.state.revoked = remaining;
+    this.state.reAdmitted = [...this.state.reAdmitted.filter((item) => item !== fingerprint), fingerprint];
+    await this.persist();
+    this.refreshConflicts();
+    this.note(t("已从本机吊销名单移除设备 {fingerprint}", { fingerprint: short(fingerprint) }));
+    this.options.onChange?.();
   }
 
   /**
@@ -800,12 +828,27 @@ export class Engine {
   }
 
   /** 把吊销名单并进来；被吊销的设备此后不再参与冲突判定。 */
-  private applyRevocations(revocations: readonly { readonly fingerprint: string }[]): void {
+  private applyRevocations(
+    revocations: readonly { readonly fingerprint: string; readonly at: string }[],
+  ): void {
     for (const revocation of revocations) {
-      if (!this.state.revoked.includes(revocation.fingerprint)) {
-        this.state.revoked = [...this.state.revoked, revocation.fingerprint];
-        this.note(t("设备 {fingerprint} 已被吊销，此后不再参与判断", { fingerprint: short(revocation.fingerprint) }));
+      // 使用者在本机把它移出过名单，就不再记回来；中继上的吊销记录本身不受影响。
+      if (this.state.reAdmitted.includes(revocation.fingerprint)) {
+        continue;
       }
+      if (this.state.revoked.some((entry) => entry.fingerprint === revocation.fingerprint)) {
+        continue;
+      }
+      const peer = this.state.peers.find((candidate) => candidate.fingerprint === revocation.fingerprint);
+      this.state.revoked = [
+        ...this.state.revoked,
+        {
+          fingerprint: revocation.fingerprint,
+          name: peer?.label ?? "",
+          revokedAt: revocation.at === "" ? null : revocation.at,
+        },
+      ];
+      this.note(t("设备 {fingerprint} 已被吊销，此后不再参与判断", { fingerprint: short(revocation.fingerprint) }));
     }
   }
 
@@ -815,7 +858,8 @@ export class Engine {
 
   /** 未被吊销的对端。 */
   private activePeers(): DeviceStatus[] {
-    return this.state.peers.filter((peer) => !this.state.revoked.includes(peer.fingerprint));
+    const revoked = new Set(this.state.revoked.map((entry) => entry.fingerprint));
+    return this.state.peers.filter((peer) => !revoked.has(peer.fingerprint));
   }
 
   /** 按提醒规则给出提示。全部中继都联系不上才算持续故障。 */
@@ -917,6 +961,7 @@ export class Engine {
       sequence: this.state.sequence,
       peers: [...this.state.peers],
       revoked: [...this.state.revoked],
+      reAdmitted: [...this.state.reAdmitted],
       retired: this.state.retired,
     });
   }

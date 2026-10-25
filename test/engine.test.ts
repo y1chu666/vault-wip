@@ -541,7 +541,7 @@ describe("合并对端状态", () => {
     await env.engine.tick("timer");
 
     const snapshot = env.snapshot();
-    expect(snapshot.revoked).toContain(peer.fingerprint);
+    expect(snapshot.revoked.map((entry) => entry.fingerprint)).toContain(peer.fingerprint);
     expect(snapshot.conflicts).toHaveLength(0);
   });
 });
@@ -589,7 +589,66 @@ describe("注册、吊销与退役", () => {
     await env.engine.revoke(peer.fingerprint);
 
     expect(env.relay.requests[0]?.body["target"]).toBe(peer.fingerprint);
-    expect(env.snapshot().revoked).toContain(peer.fingerprint);
+    const entry = env.snapshot().revoked.find((item) => item.fingerprint === peer.fingerprint);
+    expect(entry?.revokedAt).not.toBeNull();
+  });
+
+  it("吊销记录带上中继给出的名称与时间", async () => {
+    const env = await fixture();
+    const peer = DeviceKey.generate();
+    const record = peerRecord({
+      key: peer,
+      contentKey: await contentKeyOf(env.files),
+      channelId: "aa".repeat(16),
+      sequence: 1,
+      collectedAt: "2023-11-14T22:15:23Z",
+      payload: statusContent("示例设备乙", ["notes/a.md"]),
+    });
+    env.relay.reply = () => ({
+      status: 200,
+      body: {
+        accepted: true,
+        records: [recordDTO(record)],
+        revocations: [{ fingerprint: peer.fingerprint, by: peer.fingerprint, at: "2023-11-14T22:15:23Z" }],
+      },
+    });
+
+    await env.engine.tick("timer");
+
+    const entry = env.snapshot().revoked.find((item) => item.fingerprint === peer.fingerprint);
+    expect(entry?.name).toBe("示例设备乙");
+    expect(entry?.revokedAt).toBe("2023-11-14T22:15:23Z");
+  });
+
+  it("从本机名单移出之后不再重新记入", async () => {
+    const env = await fixture();
+    const peer = DeviceKey.generate();
+    const record = peerRecord({
+      key: peer,
+      contentKey: await contentKeyOf(env.files),
+      channelId: "aa".repeat(16),
+      sequence: 1,
+      collectedAt: "2023-11-14T22:15:23Z",
+      payload: statusContent("示例设备乙", ["notes/a.md"]),
+    });
+    env.relay.reply = () => ({
+      status: 200,
+      body: {
+        accepted: true,
+        records: [recordDTO(record)],
+        revocations: [{ fingerprint: peer.fingerprint, by: peer.fingerprint, at: "2023-11-14T22:15:23Z" }],
+      },
+    });
+
+    await env.engine.tick("timer");
+    expect(env.snapshot().revoked).toHaveLength(1);
+
+    await env.engine.unrevoke(peer.fingerprint);
+    expect(env.snapshot().revoked).toHaveLength(0);
+
+    // 中继再发来同一条吊销记录，也不该把它记回本机名单。
+    await env.engine.tick("timer");
+    expect(env.snapshot().revoked).toHaveLength(0);
   });
 
   it("尚未注册时不允许吊销", async () => {

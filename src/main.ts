@@ -238,6 +238,21 @@ export default class VaultWipPlugin extends Plugin {
   }
 
   /** 本设备退役。 */
+  /** 从本机吊销名单里移出一台设备；中继上的吊销记录不受影响。 */
+  async unrevoke(fingerprint: string): Promise<void> {
+    const engine = this.engine;
+    if (engine === null) {
+      return;
+    }
+    try {
+      await engine.unrevoke(fingerprint);
+      new Notice(prefixed(t("已从本机吊销名单移除设备 {fingerprint}", { fingerprint: fingerprint.slice(0, 8) })));
+    } catch (error) {
+      new Notice(prefixed(describe(error)), 0);
+    }
+    this.refresh();
+  }
+
   async retire(): Promise<void> {
     const engine = this.engine;
     if (engine === null) {

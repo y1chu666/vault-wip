@@ -57,15 +57,13 @@
 /* 说明层：解释性文字、空状态与操作回执，一律小字灰色。 */
 .vault-wip-hint,
 .vault-wip-flash,
-.vault-wip-file-more,
-.vault-wip-empty {
+.vault-wip-file-more {
   font-size: var(--vw-hint);
   line-height: 1.55;
   color: var(--text-muted);
 }
 
-.vault-wip-hint,
-.vault-wip-empty {
+.vault-wip-hint {
   margin: var(--vw-gap-sm) 0 0;
 }
 
