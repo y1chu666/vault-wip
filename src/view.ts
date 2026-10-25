@@ -163,12 +163,12 @@ export class WipView extends ItemView {
       warn.setText(t("配置有误：{error}", { error }));
       const path = this.plugin.configPath();
       if (path !== null) {
-        pane.createDiv({ text: t("配置文件：{path}", { path }) });
+        hint(pane, t("配置文件：{path}", { path }));
       }
       return;
     }
     if (snapshot === null) {
-      pane.createDiv({ text: t("尚未就绪：请先在设置中填写中继信息。") });
+      hint(pane, t("尚未就绪：请先在设置中填写中继信息。"));
       return;
     }
 
@@ -215,7 +215,7 @@ export class WipView extends ItemView {
 
     if (snapshot.local === null) {
       heading(pane, t("本机改动"));
-      pane.createDiv({ text: t("尚未取得本机状态。") });
+      hint(pane, t("尚未取得本机状态。"));
     } else {
       const local = snapshot.local;
       const card = pane.createDiv({ cls: "vault-wip-card" });
@@ -242,7 +242,7 @@ export class WipView extends ItemView {
 
     heading(pane, t("与对端的冲突"));
     if (snapshot.conflicts.length === 0) {
-      pane.createDiv({ text: t("未发现两端改动同一文件。") });
+      hint(pane, t("未发现两端改动同一文件。"));
     } else {
       for (const conflict of snapshot.conflicts) {
         conflictLine(pane, conflict);
@@ -273,7 +273,7 @@ export class WipView extends ItemView {
     heading(pane, t("各端状态"));
     const active = snapshot.peers.filter((peer) => !snapshot.revoked.includes(peer.fingerprint));
     if (active.length === 0) {
-      pane.createDiv({ text: t("尚无可用的对端设备记录。") });
+      hint(pane, t("尚无可用的对端设备记录。"));
     }
     for (const peer of active) {
       peerBlock(pane, peer, (fingerprint) => {
@@ -283,9 +283,7 @@ export class WipView extends ItemView {
 
     if (snapshot.revoked.length > 0) {
       heading(pane, t("已被吊销"));
-      pane.createDiv({
-        text: t("下列设备的记录此后不再参与判断；吊销名单长期保留，不会自行消失。"),
-      });
+      hint(pane, t("下列设备的记录此后不再参与判断；吊销名单长期保留，不会自行消失。"));
       for (const fingerprint of snapshot.revoked) {
         pane.createDiv({ text: fingerprint });
       }
@@ -321,11 +319,12 @@ export class WipView extends ItemView {
 
     heading(pane, t("本机计数"));
     table(pane, [[t("已上报序号"), String(snapshot.sequence)]]);
-    pane.createDiv({
-      text: t(
+    hint(
+      pane,
+      t(
         "序号由本设备自己推进，平时不必过问。只有在它已经无法继续推进时（例如上一条记录越过了可表示范围），才需要在这里重置；重置只改本机计数，不会改动中继上的任何数据。",
       ),
-    });
+    );
     const countRow = pane.createDiv({ cls: "vault-wip-actions" });
     const resetButton = countRow.createEl("button", { cls: "mod-warning", text: t("重置本机计数") });
     resetButton.onclick = () => {
@@ -341,7 +340,7 @@ export class WipView extends ItemView {
 
     heading(pane, t("事件"));
     if (snapshot.diagnostics.events.length === 0) {
-      pane.createDiv({ text: t("尚无事件。") });
+      hint(pane, t("尚无事件。"));
     } else {
       const log = pane.createDiv({ cls: "vault-wip-log" });
       for (const event of [...snapshot.diagnostics.events].reverse()) {
@@ -390,11 +389,13 @@ export class WipView extends ItemView {
       return;
     }
 
-    pane.createDiv({
-      text: t(
+    hint(
+      pane,
+      t(
         "记录内容以仓库为范围端到端加密，中继只见到密文。内容密钥由本机生成，可以按下面三种方式交给同仓库的其他设备。",
       ),
-    });
+      true,
+    );
 
     const stringCard = section(pane, t("本机密钥串"));
     const stringActions = stringCard.createDiv({ cls: "vault-wip-actions" });
@@ -418,11 +419,13 @@ export class WipView extends ItemView {
     };
 
     const passphraseCard = section(pane, t("口令封装"));
-    passphraseCard.createDiv({
-      text: t(
+    hint(
+      passphraseCard,
+      t(
         "口令封装的文件需要口令才能解开，可通过可信度较低的渠道传递；口令强度通常低于随机密钥串，因此列在密钥串之后。",
       ),
-    });
+      true,
+    );
     const passphraseRow = passphraseCard.createDiv({ cls: "vault-wip-actions" });
     const passphrase = passphraseRow.createEl("input", { type: "password" });
     passphrase.placeholder = t("口令");
@@ -446,7 +449,7 @@ export class WipView extends ItemView {
     };
 
     const importCard = section(pane, t("导入密钥"));
-    importCard.createDiv({ text: t("粘贴另一台设备给出的密钥串或口令封装文本；口令留空表示文本本身即密钥串。") });
+    hint(importCard, t("粘贴另一台设备给出的密钥串或口令封装文本；口令留空表示文本本身即密钥串。"), true);
     const importRow = importCard.createDiv({ cls: "vault-wip-actions" });
     const importText = importRow.createEl("textarea", { cls: "vault-wip-textarea" });
     importText.placeholder = t("密钥串或口令封装文本");
@@ -473,9 +476,11 @@ export class WipView extends ItemView {
       retireButton.setText(t("退役本设备"));
       void this.plugin.retire();
     };
-    retireCard.createDiv({
-      text: t("退役会删除各中继上本设备的数据，并将本设备记入吊销名单；此后须重新注册方可继续使用。"),
-    });
+    hint(
+      retireCard,
+      t("退役会删除各中继上本设备的数据，并将本设备记入吊销名单；此后须重新注册方可继续使用。"),
+      true,
+    );
 
     this.securityDynamic = pane.createDiv({ cls: "vault-wip-security-status" });
     this.securityBuilt = true;
@@ -499,9 +504,11 @@ export class WipView extends ItemView {
     ]);
 
     const identityCard = section(container, t("中继身份"));
-    identityCard.createDiv({
-      text: t("首次配对时中继的公钥无从核验，只能先予接受；请将下列指纹与中继一侧核对一次。此后公钥一旦变化，本机将停止采用其回应。"),
-    });
+    hint(
+      identityCard,
+      t("首次配对时中继的公钥无从核验，只能先予接受；请将下列指纹与中继一侧核对一次。此后公钥一旦变化，本机将停止采用其回应。"),
+      true,
+    );
     for (const relay of snapshot.relays) {
       table(identityCard, [
         [t("{name} 的公钥指纹", { name: relay.name }), relay.fingerprint ?? t("尚未配对")],
@@ -559,6 +566,11 @@ function section(parent: HTMLElement, title: string): HTMLElement {
 /** 小节标题。 */
 function heading(parent: HTMLElement, text: string): HTMLElement {
   return parent.createEl("h4", { text });
+}
+
+/** 说明性文字：小字灰色，与正文分开；紧跟在标题后时不再留上边距。 */
+function hint(parent: HTMLElement, text: string, flush = false): HTMLElement {
+  return parent.createDiv({ cls: flush ? "vault-wip-hint is-flush" : "vault-wip-hint", text });
 }
 
 /** 一张两列的小表。 */
@@ -695,7 +707,7 @@ function suspectNotes(parent: HTMLElement, payload: StatusPayload): void {
   if (payload.conflictFiles.length > 0) {
     parts.push(t("{count} 个文件留有合并冲突的痕迹", { count: payload.conflictFiles.length }));
   }
-  parent.createDiv({ text: parts.join(t("；")) });
+  hint(parent, parts.join(t("；")));
 }
 
 /** 一行冲突。 */

@@ -1,25 +1,52 @@
-/* 状态视图的少量样式。取值一律用 Obsidian 的主题变量，跟随主题明暗。 */
+/* 状态视图的少量样式。取值一律用 Obsidian 的主题变量，跟随主题明暗。
+ *
+ * 字号与间距按角色分层，不按元素随手设：
+ *   分组标题 0.8em／块标题 0.88em／正文 0.85em／说明 0.78em／元信息 0.74em。
+ * 间距只有四档：行内 0.25em、块内 0.5em、同级块 0.75em、换节 1.4em。
+ * 各层含义见下方注释；新加元素时先归入其中一层，不要另起字号。 */
+
+.vault-wip-view,
+.vault-wip-settings {
+  --vw-title: 0.88em;
+  --vw-body: 0.85em;
+  --vw-label: 0.8em;
+  --vw-hint: 0.78em;
+  --vw-meta: 0.74em;
+  --vw-gap-xs: 0.25em;
+  --vw-gap-sm: 0.5em;
+  --vw-gap-md: 0.75em;
+  --vw-gap-lg: 1.4em;
+}
 
 .vault-wip-view {
   padding: 0.35em 0.6em 1em;
   font-size: 0.9em;
 }
 
+/* 分组标题：只用于换节，字号最小但形态固定，免得与卡片标题混淆。 */
 .vault-wip-view h4 {
-  margin: 1.5em 0 0.4em;
-  font-size: 0.82em;
+  margin: var(--vw-gap-lg) 0 var(--vw-gap-sm);
+  font-size: var(--vw-label);
   font-weight: 600;
   color: var(--text-faint);
   letter-spacing: 0.05em;
 }
 
+/* 每栏的第一个元素不留上边距，否则各栏的首屏起点会各不相同。 */
+.vault-wip-pane > *:first-child {
+  margin-top: 0;
+}
+
+/* 正文层：表格与普通文字。 */
 .vault-wip-table {
-  font-size: 0.86em;
+  font-size: var(--vw-body);
   border-collapse: collapse;
+  width: 100%;
 }
 
 .vault-wip-table td {
   padding: 0.1em 0.8em 0.1em 0;
+  vertical-align: top;
 }
 
 .vault-wip-table td:first-child {
@@ -27,10 +54,49 @@
   white-space: nowrap;
 }
 
-.vault-wip-table td {
-  vertical-align: top;
+/* 说明层：解释性文字、空状态与操作回执，一律小字灰色。 */
+.vault-wip-hint,
+.vault-wip-flash,
+.vault-wip-file-more,
+.vault-wip-empty {
+  font-size: var(--vw-hint);
+  line-height: 1.55;
+  color: var(--text-muted);
 }
 
+.vault-wip-hint,
+.vault-wip-empty {
+  margin: var(--vw-gap-sm) 0 0;
+}
+
+/* 紧跟在标题后的说明，与标题之间只留一点点距离。 */
+.vault-wip-hint.is-flush {
+  margin-top: var(--vw-gap-xs);
+}
+
+/* 警告与冲突：左侧色条加浅底，形状固定，不靠字号或颜色单独承担提示。 */
+.vault-wip-notice {
+  margin: var(--vw-gap-md) 0 0;
+  padding: 0.5em 0.7em;
+  border-left: 3px solid var(--text-warning);
+  border-radius: 4px;
+  background: var(--background-secondary);
+  font-size: var(--vw-body);
+}
+
+.vault-wip-notice.is-error {
+  border-left-color: var(--text-error);
+}
+
+.vault-wip-notice-title {
+  font-weight: 600;
+}
+
+.vault-wip-notice-title + .vault-wip-hint {
+  margin-top: 0.2em;
+}
+
+/* 单独一句警告：仍用警示色，但字号与正文一致，不再盖过标题。 */
 .vault-wip-warning {
   color: var(--text-warning);
 }
@@ -39,19 +105,56 @@
   color: var(--text-error);
 }
 
+/* 卡片：并列对象统一这一种外壳。 */
+.vault-wip-card,
 .vault-wip-peer,
 .vault-wip-relay {
+  margin: var(--vw-gap-md) 0 0;
+  padding: 0.7em 0.8em;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
-  margin-bottom: 0.7em;
-  padding: 0.55em 0.7em;
   background: var(--background-secondary);
+}
+
+.vault-wip-card + .vault-wip-card,
+.vault-wip-peer + .vault-wip-peer,
+.vault-wip-relay + .vault-wip-relay {
+  margin-top: var(--vw-gap-sm);
+}
+
+.vault-wip-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6em;
+}
+
+/* 块标题：卡片、设备与中继的标题，比分组标题醒目一档。 */
+.vault-wip-card-title,
+.vault-wip-peer-name {
+  font-size: var(--vw-title);
+  font-weight: 600;
+}
+
+/* 元信息层：时间、序号、日志与统计标签。 */
+.vault-wip-card-meta,
+.vault-wip-peer-meta,
+.vault-wip-log-line,
+.vault-wip-stat-label {
+  font-size: var(--vw-meta);
+}
+
+.vault-wip-card-meta,
+.vault-wip-peer-meta {
+  font-family: var(--font-monospace);
+  color: var(--text-muted);
 }
 
 .vault-wip-peer-head {
   display: flex;
   align-items: center;
   gap: 0.5em;
+  margin-bottom: 0.25em;
 }
 
 .vault-wip-dot {
@@ -73,33 +176,27 @@
   background: var(--text-faint);
 }
 
+.vault-wip-dot.is-bad {
+  background: var(--color-red);
+}
+
 .vault-wip-peer-title {
   flex: 1;
   min-width: 0;
 }
 
-.vault-wip-peer-name {
-  font-weight: 600;
-}
-
-.vault-wip-peer-meta {
-  font-family: var(--font-monospace);
-  font-size: 0.78em;
-  color: var(--text-muted);
-}
-
 .vault-wip-revoke {
   flex: none;
-  padding: 0.15em 0.5em;
-  font-size: 0.8em;
+  padding: 0.18em 0.5em;
+  font-size: var(--vw-hint);
 }
 
 .vault-wip-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5em;
+  gap: 0.45em;
   align-items: center;
-  margin: 0.5em 0;
+  margin: var(--vw-gap-sm) 0 0;
 }
 
 .vault-wip-textarea {
@@ -107,9 +204,54 @@
   min-height: 3em;
 }
 
-.vault-wip-flash {
+/* 已吊销设备：每条一行，名称、指纹与时间各自归位，右侧单独一个删除按钮。 */
+.vault-wip-revoked-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  padding: 0.5em 0;
+}
+
+.vault-wip-revoked-row + .vault-wip-revoked-row {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.vault-wip-revoked-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.vault-wip-revoked-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+}
+
+.vault-wip-revoked-name {
+  font-size: var(--vw-title);
+  font-weight: 600;
+}
+
+.vault-wip-revoked-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6em;
+  margin-top: 0.1em;
+  font-family: var(--font-monospace);
+  font-size: var(--vw-meta);
   color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
+}
+
+.vault-wip-revoked-fingerprint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-wip-revoked-time {
+  flex: none;
 }
 
 /* 改动类型：统计块、分组清单与徽章。颜色只作辅助，文字与图标才是依据。 */
@@ -117,18 +259,18 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4em;
-  margin: 0.45em 0 0.55em;
+  margin: var(--vw-gap-sm) 0;
 }
 
 .vault-wip-kind {
   display: inline-flex;
   align-items: center;
   gap: 0.35em;
-  padding: 0.15em 0.6em;
+  padding: 0.12em 0.55em;
   border-radius: 999px;
   background: var(--background-modifier-hover);
   border: 1px solid var(--background-modifier-border);
-  font-size: 0.85em;
+  font-size: var(--vw-hint);
 }
 
 .vault-wip-kind-icon {
@@ -142,7 +284,7 @@
 }
 
 .vault-wip-group {
-  margin: 0.25em 0;
+  margin: 0.2em 0;
 }
 
 .vault-wip-group-title {
@@ -152,6 +294,7 @@
   padding: 0.2em 0.3em;
   border-radius: 4px;
   cursor: pointer;
+  font-size: var(--vw-body);
   font-weight: 500;
   user-select: none;
   list-style: none;
@@ -188,11 +331,11 @@
   align-items: start;
   padding: 0.12em 0 0.12em 1.1em;
   font-family: var(--font-monospace);
-  font-size: 0.88em;
+  font-size: 0.82em;
+  line-height: 1.5;
 }
 
 .vault-wip-file-path {
-  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -224,10 +367,19 @@
   color: var(--text-normal);
 }
 
+/* 「另有 N 个」与文件名左缘对齐；第一格留出徽章的宽度，不靠缩进猜位置。 */
 .vault-wip-file-more {
-  padding-left: 2.2em;
-  font-size: 0.85em;
-  color: var(--text-muted);
+  display: flex;
+  align-items: start;
+  gap: 0.45em;
+  padding-left: 1.1em;
+  font-family: var(--font-monospace);
+}
+
+.vault-wip-file-more::before {
+  content: "";
+  width: 1.3em;
+  flex: none;
 }
 
 .vault-wip-kind.is-added,
@@ -280,6 +432,7 @@
   border-bottom: 1px solid var(--background-modifier-border);
   overflow-x: auto;
   scrollbar-width: none;
+  scrollbar-gutter: stable;
 }
 
 .vault-wip-tabs::-webkit-scrollbar {
@@ -295,7 +448,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--text-muted);
-  font-size: 0.9em;
+  font-size: 0.88em;
   white-space: nowrap;
 }
 
@@ -310,12 +463,12 @@
   font-weight: 600;
 }
 
-/* 概览顶部的数字块。 */
+/* 概览顶部的数字块：数字最大，标签归入元信息层。 */
 .vault-wip-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5em, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(4.8em, 1fr));
   gap: 0.5em;
-  margin: 0.3em 0 0.6em;
+  margin: var(--vw-gap-sm) 0 0.6em;
 }
 
 .vault-wip-stat {
@@ -334,18 +487,14 @@
 
 .vault-wip-stat-label {
   margin-top: 0.15em;
-  font-size: 0.78em;
   color: var(--text-muted);
-}
-
-.vault-wip-dot.is-bad {
-  background: var(--color-red);
 }
 
 /* 诊断事件：等宽、可滚动，长行自动折行。 */
 .vault-wip-log {
   max-height: 18em;
   overflow: auto;
+  margin-top: var(--vw-gap-sm);
   padding: 0.5em 0.6em;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -354,102 +503,31 @@
 
 .vault-wip-log-line {
   font-family: var(--font-monospace);
-  font-size: 0.78em;
   color: var(--text-muted);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* 设置页：分组之间留白，说明文字收小，与条目标题拉开层次。 */
+/* 设置页：与状态视图共用同一套字号层级。 */
 .vault-wip-settings .setting-item-heading {
-  margin-top: 1.4em;
+  margin-top: var(--vw-gap-lg);
   padding-bottom: 0.35em;
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .vault-wip-settings .setting-item-heading .setting-item-name {
-  font-size: 0.82em;
+  font-size: var(--vw-label);
   font-weight: 600;
   letter-spacing: 0.05em;
   color: var(--text-faint);
 }
 
 .vault-wip-settings .setting-item-description {
-  font-size: 0.82em;
-  color: var(--text-muted);
-}
-
-/* 安全板块：小节之间与按钮行都留出间隔，避免挤成一团。 */
-.vault-wip-security .vault-wip-card {
-  margin-bottom: 0.7em;
-}
-
-.vault-wip-security .vault-wip-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45em;
-  margin: 0.4em 0 0.2em;
-}
-
-.vault-wip-card > .vault-wip-card-title {
-  margin-bottom: 0.45em;
-  font-weight: 600;
-}
-
-/* 本机改动独立成卡片，与设备信息、各端卡片区分开。 */
-.vault-wip-card {
-  margin: 0.9em 0 0.7em;
-  padding: 0.55em 0.7em;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  background: var(--background-secondary);
-}
-
-.vault-wip-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.6em;
-  margin-bottom: 0.35em;
-}
-
-.vault-wip-card-title {
-  font-weight: 600;
-}
-
-.vault-wip-card-meta {
-  font-family: var(--font-monospace);
-  font-size: 0.78em;
+  font-size: var(--vw-hint);
   color: var(--text-muted);
 }
 
 /* 固定滚动条槽位：折叠内容改变高度时，宽度不再跟着跳。 */
 .workspace-leaf-content[data-type="vault-wip-view"] .view-content {
   scrollbar-gutter: stable;
-}
-
-.vault-wip-tabs {
-  scrollbar-gutter: stable;
-}
-
-/* 本设备的身份信息：字号更小，与改动卡片分开。 */
-.vault-wip-self .vault-wip-table {
-  font-size: 0.78em;
-}
-
-/* 远端查询不是主要信息，字号再小一档。 */
-.vault-wip-remote .vault-wip-table {
-  font-size: 0.78em;
-}
-
-/* 概览底部的两个按钮均分整行，不再左对齐挤在一起。 */
-.vault-wip-actions-even {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5em;
-  margin-top: 0.8em;
-}
-
-.vault-wip-actions-even button {
-  width: 100%;
 }
