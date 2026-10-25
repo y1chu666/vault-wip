@@ -180,13 +180,20 @@
   transform: rotate(90deg);
 }
 
+/* 一行文件：徽章与路径分两列。路径可能很长，整行不截断，改按可用宽度换行。 */
 .vault-wip-file {
-  display: flex;
-  align-items: center;
-  gap: 0.45em;
+  display: grid;
+  grid-template-columns: 1.3em minmax(0, 1fr);
+  column-gap: 0.45em;
+  align-items: start;
   padding: 0.12em 0 0.12em 1.1em;
   font-family: var(--font-monospace);
   font-size: 0.88em;
+}
+
+.vault-wip-file-path {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .vault-wip-badge {
@@ -209,7 +216,11 @@
   color: var(--text-faint);
 }
 
+/* 文件名整体优先换到下一行；宽度仍不足时由 max-width 与 overflow-wrap 折行，不溢出。 */
 .vault-wip-file-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   color: var(--text-normal);
 }
 

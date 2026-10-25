@@ -659,7 +659,11 @@ function groupedFiles(
   }
 }
 
-/** 一行文件：类型徽章、目录与文件名分开着色，悬停给出完整路径。 */
+/**
+ * 一行文件：类型徽章、目录与文件名分开着色，悬停给出完整路径。
+ * 路径与文件名都可能很长，因此不截断，改为按可用宽度换行：目录在斜杠后断开，
+ * 文件名优先整体换到下一行，宽度仍不足时才在名字内部折行。
+ */
 function fileRow(
   parent: HTMLElement,
   path: string,
@@ -667,11 +671,16 @@ function fileRow(
 ): void {
   const row = parent.createDiv({ cls: "vault-wip-file", attr: { title: path } });
   setIcon(row.createEl("span", { cls: `vault-wip-badge ${kind.cls}` }), kind.icon);
+  const text = row.createDiv({ cls: "vault-wip-file-path" });
   const slash = path.lastIndexOf("/");
   if (slash >= 0) {
-    row.createEl("span", { cls: "vault-wip-file-dir", text: path.slice(0, slash + 1) });
+    const dir = text.createEl("span", { cls: "vault-wip-file-dir" });
+    for (const segment of path.slice(0, slash + 1).split("/").slice(0, -1)) {
+      dir.appendText(`${segment}/`);
+      dir.createEl("wbr");
+    }
   }
-  row.createEl("span", { cls: "vault-wip-file-name", text: path.slice(slash + 1) });
+  text.createEl("span", { cls: "vault-wip-file-name", text: path.slice(slash + 1) });
 }
 
 /** 假冲突的提示：只影响措辞，不影响是否算冲突。 */
