@@ -335,7 +335,7 @@ describe("isDegraded", () => {
 
 describe("界面语言", () => {
   it("不写这一项时跟随 Obsidian", () => {
-    expect(parsed(minimal).ui).toEqual({ language: "auto" });
+    expect(parsed(minimal).ui).toEqual({ language: "auto", openOnStart: true });
   });
 
   it("可以固定成中文或英文", () => {
@@ -357,12 +357,34 @@ describe("界面语言", () => {
 
   it("写回之后仍然认得出这一项", () => {
     const before = defaultConfig("vault-example");
-    const withEnglish: Config = { ...before, ui: { language: "en" } };
+    const withEnglish: Config = { ...before, ui: { ...before.ui, language: "en" } };
     expect(parsed(serializeConfig(withEnglish)).ui.language).toBe("en");
   });
 
   it("首次生成的配置里带上这一项", () => {
     expect(templateConfig("vault-example")).toContain("[ui]");
+  });
+});
+
+describe("启动时在右侧栏打开", () => {
+  it("不写这一项时默认打开", () => {
+    expect(parsed(minimal).ui.openOnStart).toBe(true);
+  });
+
+  it("可以关掉", () => {
+    expect(parsed(`${channelBlock}[ui]\nopen_on_start = false\n${relayBlock}`).ui.openOnStart).toBe(false);
+  });
+
+  it("不是布尔值时如实说出来", () => {
+    expect(failure(`${channelBlock}[ui]\nopen_on_start = "yes"\n${relayBlock}`)).toContain(
+      "ui.open_on_start 应当是 true 或 false",
+    );
+  });
+
+  it("写回之后仍然认得出这一项", () => {
+    const before = defaultConfig("vault-example");
+    const off: Config = { ...before, ui: { ...before.ui, openOnStart: false } };
+    expect(parsed(serializeConfig(off)).ui.openOnStart).toBe(false);
   });
 });
 

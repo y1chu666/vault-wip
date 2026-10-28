@@ -118,9 +118,22 @@ export class WipSettingTab extends PluginSettingTab {
               return;
             }
             this.edit((draft) => {
-              draft.ui = { language: value };
+              draft.ui = { ...draft.ui, language: value };
             });
           }),
+      );
+
+    new Setting(this.containerEl)
+      .setName(t("加载时在右侧栏打开"))
+      .setDesc(
+        t("启动后在右侧栏挂一个状态视图标签页，不展开侧栏，也不抢焦点；上次已打开时保持原状。"),
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(config.ui.openOnStart).onChange((value) => {
+          this.edit((draft) => {
+            draft.ui = { ...draft.ui, openOnStart: value };
+          });
+        }),
       );
   }
 

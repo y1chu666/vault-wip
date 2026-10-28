@@ -634,6 +634,13 @@ export const ENGLISH = {
   // 敏感取值：界面默认遮去中段，右侧眼睛按钮展开。
   "显示完整内容": "Show the full value",
   "隐藏完整内容": "Hide the full value",
+
+  // 启动时打开视图：设置项、说明与配置注释。
+  "加载时在右侧栏打开": "Open in the right sidebar on load",
+  "启动后在右侧栏挂一个状态视图标签页，不展开侧栏，也不抢焦点；上次已打开时保持原状。":
+    "After startup, put a status view tab in the right sidebar without expanding the sidebar or taking focus; if it was already open, leave it as it is.",
+  "启动后在右侧栏挂一个状态视图标签页；不展开侧栏，也不抢焦点。":
+    "Put a status view tab in the right sidebar after startup; the sidebar is not expanded and focus is left alone.",
 } as const;
 
 /** 可用的文案键，即英文表里有的那些中文原句。 */

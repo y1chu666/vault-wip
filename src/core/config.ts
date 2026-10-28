@@ -87,6 +87,8 @@ export interface QuerySettings {
 export interface UiSettings {
   /** 界面语言：跟随 Obsidian、恒用中文或恒用英文。 */
   readonly language: LanguageChoice;
+  /** 加载完成后是否把状态视图放进右侧栏。 */
+  readonly openOnStart: boolean;
 }
 
 /** 提醒配置。 */
@@ -211,6 +213,7 @@ export function serializeConfig(config: Config): string {
     },
     ui: {
       language: config.ui.language,
+      open_on_start: config.ui.openOnStart,
     },
     query: {
       remote: config.query.remote,
@@ -242,7 +245,7 @@ export function defaultConfig(alias: string): Config {
       detectConflictFiles: true,
     },
     notify: { repeatSeconds: DEFAULT_REPEAT_SECONDS, conflictRepeatSeconds: DEFAULT_CONFLICT_REPEAT_SECONDS },
-    ui: { language: "auto" },
+    ui: { language: "auto", openOnStart: true },
     query: { remote: "", intervalSeconds: DEFAULT_QUERY_INTERVAL_SECONDS },
     relay: [
       {
@@ -302,6 +305,8 @@ conflict_repeat_seconds = ${DEFAULT_CONFLICT_REPEAT_SECONDS}
 # ${t("界面语言，可取 {choices}。auto 表示跟随 Obsidian 的界面语言；", { choices: LANGUAGE_CHOICES.join(separator) })}
 # ${t("命令名只在插件重新加载之后才会跟着变。")}
 language = "auto"
+# ${t("启动后在右侧栏挂一个状态视图标签页；不展开侧栏，也不抢焦点。")}
+open_on_start = true
 
 [query]
 # ${t("远端查询用的远端名，例如 origin；留空表示用当前分支的上游。")}
@@ -455,7 +460,7 @@ function parseNotify(value: unknown, problems: string[]): NotifySettings {
 }
 
 function parseUi(value: unknown, problems: string[]): UiSettings {
-  const fallback: UiSettings = { language: "auto" };
+  const fallback: UiSettings = { language: "auto", openOnStart: true };
   if (value === undefined) {
     return fallback;
   }
@@ -464,13 +469,14 @@ function parseUi(value: unknown, problems: string[]): UiSettings {
     return fallback;
   }
 
-  checkKeys(value, ["language"], "ui", problems);
+  checkKeys(value, ["language", "open_on_start"], "ui", problems);
   const language = readString(value, "language", "ui", problems) ?? fallback.language;
+  const openOnStart = readBoolean(value, "open_on_start", "ui", problems) ?? fallback.openOnStart;
   if (!isLanguageChoice(language)) {
     problems.push(t("ui.language 只能取 {choices}", { choices: LANGUAGE_CHOICES.join(t("、")) }));
-    return fallback;
+    return { ...fallback, openOnStart };
   }
-  return { language };
+  return { language, openOnStart };
 }
 
 function parseQuery(value: unknown, problems: string[]): QuerySettings {

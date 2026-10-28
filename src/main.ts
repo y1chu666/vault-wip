@@ -39,13 +39,15 @@ export default class VaultWipPlugin extends Plugin {
   private statusBar: HTMLElement | null = null;
   private settingTab: WipSettingTab | null = null;
   private readonly views = new Set<WipView>();
+  /** 首次装配的进度；启动时要不要建视图取决于装配出来的配置，因此先等它。 */
+  private ready: Promise<void> = Promise.resolve();
 
   override onload(): void {
     this.statusBar = this.addStatusBarItem();
 
     // 装配要读配置、生成密钥并跑一次 git 采集，放在加载流程里会让 Obsidian 判定超时。
     // 先完成注册，再在后台装配；这段时间视图与设置页按「尚未就绪」处理。
-    void this.reload().catch((error: unknown) => {
+    this.ready = this.reload().catch((error: unknown) => {
       new Notice(prefixed(describe(error)), 0);
     });
 
@@ -60,6 +62,10 @@ export default class VaultWipPlugin extends Plugin {
     });
     this.settingTab = new WipSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
+
+    this.app.workspace.onLayoutReady(() => {
+      void this.openViewOnStart();
+    });
 
     // 采集与上报分开：这些时机只影响「什么时候报一次」，报什么由采集决定。
     this.registerEvent(
@@ -374,6 +380,28 @@ export default class VaultWipPlugin extends Plugin {
     }
     await leaf.setViewState({ type: VIEW_TYPE, active: true });
     await this.app.workspace.revealLeaf(leaf);
+  }
+
+  /**
+   * 启动时把状态视图放进右侧栏。
+   *
+   * 只挂标签页、不展开侧栏：展开会抢走焦点，打断开机后要做的事。视图若已随上次
+   * 布局恢复，则保持原状，既不重复创建，也不改变它当前的展开状态。配置读不出来
+   * 时开关无从判断，按关闭处理。
+   */
+  private async openViewOnStart(): Promise<void> {
+    await this.ready;
+    if (this.currentValues?.ui.openOnStart !== true) {
+      return;
+    }
+    if (this.app.workspace.getLeavesOfType(VIEW_TYPE).length > 0) {
+      return;
+    }
+    const leaf = this.app.workspace.getRightLeaf(false);
+    if (leaf === null) {
+      return;
+    }
+    await leaf.setViewState({ type: VIEW_TYPE, active: false });
   }
 
   /** 视图在打开与关闭时登记自己，好让状态变化能推过去。 */
