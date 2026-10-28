@@ -7,6 +7,7 @@ import { ItemView, Notice, setIcon, type WorkspaceLeaf } from "obsidian";
 import { displayName, type Conflict, type DeviceStatus, type RevokedDevice } from "./core/state.js";
 import type { EngineSnapshot, RelayStatus } from "./core/engine.js";
 import { PLUGIN_NAME, t } from "./core/i18n.js";
+import { maskSecret, maskUrl } from "./core/mask.js";
 import { refName, remoteSummary } from "./core/remote.js";
 import type { StatusPayload } from "./core/payload.js";
 import type VaultWipPlugin from "./main.js";
@@ -58,6 +59,8 @@ export class WipView extends ItemView {
   private securityBuilt = false;
   private confirmRetire = false;
   private confirmResetSequence = false;
+  /** 已展开的敏感取值，键由 {@link secretValue} 定；只在本次视图内有效，关闭即复原。 */
+  private readonly revealed = new Set<string>();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -286,10 +289,14 @@ export class WipView extends ItemView {
     if (collectedAt !== null) {
       selfTitle.createDiv({ cls: "vault-wip-peer-meta", text: relativeTime(collectedAt) });
     }
-    table(self, [
-      [t("指纹"), snapshot.selfFingerprint],
-      [t("仓库别名"), snapshot.alias],
-    ]);
+    table(
+      self,
+      [
+        [t("指纹"), { secret: snapshot.selfFingerprint, key: "self:fingerprint" }],
+        [t("仓库别名"), snapshot.alias],
+      ],
+      this.revealed,
+    );
     if (snapshot.retired) {
       notice(pane, t("本设备已退役：需要重新注册才能继续使用。"), true);
     }
@@ -301,9 +308,14 @@ export class WipView extends ItemView {
       hint(pane, t("尚无可用的对端设备记录。"));
     }
     for (const peer of active) {
-      peerBlock(pane, peer, (fingerprint) => {
-        void this.plugin.revoke(fingerprint);
-      });
+      peerBlock(
+        pane,
+        peer,
+        (fingerprint) => {
+          void this.plugin.revoke(fingerprint);
+        },
+        this.revealed,
+      );
     }
 
     if (snapshot.revoked.length > 0) {
@@ -332,11 +344,8 @@ export class WipView extends ItemView {
           void this.plugin.unrevoke(entry.fingerprint);
         };
         const meta = main.createDiv({ cls: "vault-wip-revoked-meta" });
-        meta.createSpan({
-          cls: "vault-wip-revoked-fingerprint",
-          text: entry.fingerprint,
-          attr: { title: entry.fingerprint },
-        });
+        const fingerprint = meta.createSpan({ cls: "vault-wip-revoked-fingerprint" });
+        secretValue(fingerprint, entry.fingerprint, `revoked:${entry.fingerprint}`, this.revealed);
         const when = revokedTimeText(entry);
         meta.createSpan({ cls: "vault-wip-revoked-time", text: when.text, attr: { title: when.title } });
       }
@@ -357,7 +366,7 @@ export class WipView extends ItemView {
     }
 
     for (const relay of snapshot.relays) {
-      relayBlock(pane, relay);
+      relayBlock(pane, relay, this.revealed);
     }
   }
 
@@ -568,10 +577,21 @@ export class WipView extends ItemView {
       true,
     );
     for (const relay of snapshot.relays) {
-      table(identityCard, [
-        [t("{name} 的公钥指纹", { name: relay.name }), relay.fingerprint ?? t("尚未配对")],
-        [t("{name} 的证书指纹", { name: relay.name }), relay.spki ?? t("不使用或尚未钉住")],
-      ]);
+      const prefix = `relay:${relay.url}`;
+      table(
+        identityCard,
+        [
+          [
+            t("{name} 的公钥指纹", { name: relay.name }),
+            relay.fingerprint === null ? t("尚未配对") : { secret: relay.fingerprint, key: `${prefix}:pk` },
+          ],
+          [
+            t("{name} 的证书指纹", { name: relay.name }),
+            relay.spki === null ? t("不使用或尚未钉住") : { secret: relay.spki, key: `${prefix}:spki` },
+          ],
+        ],
+        this.revealed,
+      );
     }
 
     if (snapshot.revoked.some((entry) => entry.fingerprint === snapshot.selfFingerprint)) {
@@ -668,13 +688,72 @@ function revokedTimeText(entry: RevokedDevice): { text: string; title: string } 
   };
 }
 
-/** 一张两列的小表。 */
-function table(parent: HTMLElement, rows: readonly (readonly [string, string])[]): void {
+/** 需要遮蔽的取值：原文，以及记住其展开状态的键。 */
+interface SecretField {
+  readonly secret: string;
+  readonly key: string;
+}
+
+/** 表格一行的取值：普通文本，或需要遮蔽的敏感取值。 */
+type CellValue = string | SecretField;
+
+/**
+ * 敏感取值的展示：默认遮去中段，右侧一只眼睛展开。
+ *
+ * 展开状态记在视图实例上，因为刷新会重建整块界面，不记就会打回星号；不写进配置，
+ * 是因为「是否正在看」属于当下这一眼，不该跨次保留。
+ */
+function secretValue(
+  parent: HTMLElement,
+  value: string,
+  key: string,
+  revealed: Set<string>,
+  mask: (value: string) => string = maskSecret,
+): void {
+  const wrapper = parent.createSpan({ cls: "vault-wip-secret" });
+  const text = wrapper.createSpan({ cls: "vault-wip-secret-text" });
+  const button = wrapper.createEl("button", { cls: "vault-wip-reveal" });
+  const apply = (): void => {
+    const shown = revealed.has(key);
+    text.setText(shown ? value : mask(value));
+    setIcon(button, shown ? "eye-off" : "eye");
+    button.setAttribute("aria-label", t(shown ? "隐藏完整内容" : "显示完整内容"));
+    button.setAttribute("aria-pressed", shown ? "true" : "false");
+  };
+  apply();
+  button.onclick = () => {
+    if (revealed.has(key)) {
+      revealed.delete(key);
+    } else {
+      revealed.add(key);
+    }
+    apply();
+  };
+}
+
+/**
+ * 一张两列的小表。
+ *
+ * 需要遮蔽的取值靠第三个参数记展开状态；不传时只画遮罩，适用于没有可交互位置的场合。
+ */
+function table(
+  parent: HTMLElement,
+  rows: readonly (readonly [string, CellValue])[],
+  revealed?: Set<string>,
+): void {
   const list = parent.createEl("table", { cls: "vault-wip-table" });
   for (const [name, value] of rows) {
     const row = list.createEl("tr");
     row.createEl("td", { text: name }).style.paddingRight = "0.75em";
-    row.createEl("td", { text: value }).style.wordBreak = "break-all";
+    const cell = row.createEl("td");
+    cell.style.wordBreak = "break-all";
+    if (typeof value === "string") {
+      cell.setText(value);
+    } else if (revealed === undefined) {
+      cell.createSpan({ cls: "vault-wip-secret-text", text: maskSecret(value.secret) });
+    } else {
+      secretValue(cell, value.secret, value.key, revealed);
+    }
   }
 }
 
@@ -833,13 +912,15 @@ function overviewPeer(parent: HTMLElement, peer: DeviceStatus): void {
 }
 
 /** 一台对端的状态。 */
-function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerprint: string) => void): void {
+function peerBlock(
+  parent: HTMLElement,
+  peer: DeviceStatus,
+  onRevoke: (fingerprint: string) => void,
+  revealed: Set<string>,
+): void {
   const block = parent.createDiv({ cls: "vault-wip-peer" });
   const head = block.createDiv({ cls: "vault-wip-peer-head" });
-  head.createDiv({
-    cls: `vault-wip-dot ${freshnessClass(peer.collectedAt)}`,
-    attr: { title: peer.fingerprint },
-  });
+  head.createDiv({ cls: `vault-wip-dot ${freshnessClass(peer.collectedAt)}` });
   const title = head.createDiv({ cls: "vault-wip-peer-title" });
   title.createDiv({ cls: "vault-wip-peer-name", text: displayName(peer) });
   title.createDiv({ cls: "vault-wip-peer-meta", text: relativeTime(peer.collectedAt) });
@@ -848,11 +929,15 @@ function peerBlock(parent: HTMLElement, peer: DeviceStatus, onRevoke: (fingerpri
     onRevoke(peer.fingerprint);
   };
 
-  table(block, [
-    [t("指纹"), peer.fingerprint],
-    [t("序号"), String(peer.sequence)],
-    [t("采集时间"), clockText(peer.collectedAt)],
-  ]);
+  table(
+    block,
+    [
+      [t("指纹"), { secret: peer.fingerprint, key: `peer:${peer.fingerprint}:fingerprint` }],
+      [t("序号"), String(peer.sequence)],
+      [t("采集时间"), clockText(peer.collectedAt)],
+    ],
+    revealed,
+  );
 }
 
 /** 十分钟内上报过即视为在线；中继不保存在线状态，只能按记录时间推断。 */
@@ -902,20 +987,29 @@ function relativeTime(iso: string): string {
 }
 
 /** 一台中继的现状。 */
-function relayBlock(parent: HTMLElement, relay: RelayStatus): void {
+function relayBlock(parent: HTMLElement, relay: RelayStatus, revealed: Set<string>): void {
   const block = parent.createDiv({ cls: "vault-wip-relay" });
   const head = block.createDiv({ cls: "vault-wip-peer-head" });
   const state = relay.lastFailure !== null ? "is-bad" : relay.channelId === "" ? "is-old" : "is-fresh";
   head.createDiv({ cls: `vault-wip-dot ${state}` });
   const title = head.createDiv({ cls: "vault-wip-peer-title" });
   title.createDiv({ cls: "vault-wip-peer-name", text: relay.name });
-  title.createDiv({ cls: "vault-wip-peer-meta", text: relay.url });
+  const address = title.createDiv({ cls: "vault-wip-peer-meta" });
+  // 地址另有遮罩规则：保留协议与顶级域，便于分辨是哪台中继。
+  secretValue(address, relay.url, `relay:${relay.url}:url`, revealed, maskUrl);
 
-  table(block, [
-    [t("传输级别"), levelText(relay)],
-    [t("频道标识"), relay.channelId === "" ? t("尚未注册") : relay.channelId],
-    [t("最近一次成功"), clockText(relay.lastSuccessAt)],
-  ]);
+  table(
+    block,
+    [
+      [t("传输级别"), levelText(relay)],
+      [
+        t("频道标识"),
+        relay.channelId === "" ? t("尚未注册") : { secret: relay.channelId, key: `relay:${relay.url}:channel` },
+      ],
+      [t("最近一次成功"), clockText(relay.lastSuccessAt)],
+    ],
+    revealed,
+  );
   if (relay.lastFailure !== null) {
     block.createDiv({ cls: "vault-wip-error", text: t("最近一次失败：{reason}", { reason: relay.lastFailure }) });
   }

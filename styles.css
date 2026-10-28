@@ -54,6 +54,40 @@
   white-space: nowrap;
 }
 
+/* 敏感取值：默认遮去中段，右侧一只眼睛展开。
+ * 遮罩文本用等宽字体，星号与指纹里的十六进制字符等宽，遮罩与展开之间宽度不跳。 */
+.vault-wip-secret {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--vw-gap-xs);
+}
+
+.vault-wip-secret-text {
+  font-family: var(--font-monospace);
+  word-break: break-all;
+}
+
+/* 眼睛按钮：只占一枚图标的宽度，不带底色与边框，避免把正文挤成按钮条。 */
+.vault-wip-reveal {
+  flex: none;
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.vault-wip-reveal:hover {
+  color: var(--text-normal);
+}
+
+.vault-wip-reveal svg {
+  width: 1em;
+  height: 1em;
+}
+
 /* 说明层：解释性文字、空状态与操作回执，一律小字灰色。 */
 .vault-wip-hint,
 .vault-wip-flash,
@@ -243,9 +277,7 @@
 
 .vault-wip-revoked-fingerprint {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
 }
 
 .vault-wip-revoked-time {

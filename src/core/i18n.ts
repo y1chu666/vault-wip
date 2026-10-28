@@ -630,6 +630,10 @@ export const ENGLISH = {
   "填写要查询的远端名，例如 origin；留空表示用当前分支的上游。查询只向远端问一下两边各有哪些提交，既不拉取也不改动本机引用，结果只在本机界面上显示。":
     "Fill in the remote name to query, for example origin; leave empty to use the upstream of the current branch. The query only asks the remote which commits each side has; it neither fetches nor changes any local reference, and the result is shown on this machine alone.",
   "例如：origin": "for example: origin",
+
+  // 敏感取值：界面默认遮去中段，右侧眼睛按钮展开。
+  "显示完整内容": "Show the full value",
+  "隐藏完整内容": "Hide the full value",
 } as const;
 
 /** 可用的文案键，即英文表里有的那些中文原句。 */

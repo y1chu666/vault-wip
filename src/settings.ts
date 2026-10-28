@@ -2,7 +2,7 @@
 //
 // 每次改动都重新序列化整份配置再写回文件：配置文件是取值的唯一来源，界面只是它的
 // 编辑器。写完立刻以新配置重建引擎，不必重载插件。
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting, type ExtraButtonComponent } from "obsidian";
 
 import type { Config, TransportLevel } from "./core/config.js";
 import {
@@ -317,30 +317,45 @@ export class WipSettingTab extends PluginSettingTab {
             }),
         );
 
-      new Setting(this.containerEl)
+      const channelSetting = new Setting(this.containerEl)
         .setName(t("频道标识"))
-        .setDesc(t("由中继生成，全局唯一；留空表示新建频道，填写表示加入这个频道。"))
-        .addText((text) =>
-          text
-            .setPlaceholder(t("留空以新建"))
-            .setValue(relay.channelId)
-            .onChange((value) => {
-              this.updateRelay(index, { channelId: value.trim() });
-            }),
-        );
+        .setDesc(t("由中继生成，全局唯一；留空表示新建频道，填写表示加入这个频道。"));
 
-      new Setting(this.containerEl)
+      channelSetting.addText((text) => {
+        text
+          .setPlaceholder(t("留空以新建"))
+          .setValue(relay.channelId)
+          .onChange((value) => {
+            this.updateRelay(index, { channelId: value.trim() });
+          });
+        text.inputEl.type = "password";
+      });
+      channelSetting.addExtraButton((button) => {
+        const input = channelSetting.controlEl.querySelector("input");
+        if (input !== null) {
+          watchReveal(button, input);
+        }
+      });
+
+      const tokenSetting = new Setting(this.containerEl)
         .setName(t("频道令牌"))
-        .setDesc(t("创建频道时只返回一次；加入已有频道时必须填写。"))
-        .addText((text) => {
-          text
-            .setPlaceholder(t("令牌"))
-            .setValue(relay.channelToken)
-            .onChange((value) => {
-              this.updateRelay(index, { channelToken: value.trim() });
-            });
-          text.inputEl.type = "password";
-        });
+        .setDesc(t("创建频道时只返回一次；加入已有频道时必须填写。"));
+
+      tokenSetting.addText((text) => {
+        text
+          .setPlaceholder(t("令牌"))
+          .setValue(relay.channelToken)
+          .onChange((value) => {
+            this.updateRelay(index, { channelToken: value.trim() });
+          });
+        text.inputEl.type = "password";
+      });
+      tokenSetting.addExtraButton((button) => {
+        const input = tokenSetting.controlEl.querySelector("input");
+        if (input !== null) {
+          watchReveal(button, input);
+        }
+      });
     });
 
     new Setting(this.containerEl).addButton((button) =>
@@ -474,6 +489,26 @@ function durationRangeHint(minimum: number): string {
   return t("请填 {minimum} 秒到 {maximum} 天之间的整数。", {
     minimum,
     maximum: MAX_INTERVAL_SECONDS / (24 * 60 * 60),
+  });
+}
+
+/**
+ * 给输入框配一只眼睛：默认按密码框显示，点开后显示原文。
+ *
+ * 频道标识与令牌都是旁人一眼看到即等于泄露的取值，而录入时又要核对自己粘贴的内容
+ * 是否完整，因此默认遮住、按需展开。展开状态只属于这一眼，切到别处再回来即复原。
+ */
+function watchReveal(button: ExtraButtonComponent, input: HTMLInputElement): void {
+  let shown = false;
+  const apply = (): void => {
+    input.type = shown ? "text" : "password";
+    button.setIcon(shown ? "eye-off" : "eye");
+    button.setTooltip(t(shown ? "隐藏完整内容" : "显示完整内容"));
+  };
+  apply();
+  button.onClick(() => {
+    shown = !shown;
+    apply();
   });
 }
 
